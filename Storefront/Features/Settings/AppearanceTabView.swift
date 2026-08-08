@@ -102,13 +102,18 @@ struct AppearanceTabView: View {
 
 /// Shared trailing width so Menu bar icon + App Icon controls share one column.
 private enum IconSettingsMetrics {
-    /// Three 40pt tiles + padding(2) each, with 10pt gaps — matches App Icon row.
-    static let controlWidth: CGFloat = 152
+    /// Four 44pt tiles + padding(2) each, with 10pt gaps — matches App Icon row.
+    static let controlWidth: CGFloat = 206
 }
 
-/// Split controls: Outline/Filled style + Bag/Cart/Store icon chips.
+/// Split controls: Outline/Filled style + Bag/Cart/Store/Shopify icon chips.
 private struct MenuBarIconPreferencePicker: View {
     @Binding var selection: MenuBarIconPreference
+
+    /// Shopify has only one form — the Outline/Filled style doesn't apply to it.
+    private var isShopifySelected: Bool {
+        selection.family == .shopify
+    }
 
     private var filledBinding: Binding<Bool> {
         Binding(
@@ -127,6 +132,9 @@ private struct MenuBarIconPreferencePicker: View {
             .labelsHidden()
             .controlSize(.small)
             .frame(maxWidth: .infinity)
+            .disabled(isShopifySelected)
+            .opacity(isShopifySelected ? 0.4 : 1)
+            .allowsHitTesting(!isShopifySelected)
 
             HStack(spacing: 10) {
                 ForEach(MenuBarIconPreference.Family.displayOrder) { family in

@@ -83,7 +83,8 @@ enum AppIconPreference: String, Codable, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// Menu bar status-item glyph — SF Symbol bag, or Polaris Cart / Store × outline / filled.
+/// Menu bar status-item glyph — SF Symbol bag, Polaris Cart / Store × outline / filled,
+/// or the single-form Shopify glyph.
 enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashable {
     case bag
     case bagFilled
@@ -91,6 +92,7 @@ enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashabl
     case cartFilled
     case store
     case storeFilled
+    case shopify
 
     var id: Self { self }
 
@@ -98,6 +100,7 @@ enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashabl
         case bag
         case cart
         case store
+        case shopify
 
         var id: Self { self }
 
@@ -106,11 +109,12 @@ enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashabl
             case .bag: "Bag"
             case .cart: "Cart"
             case .store: "Store"
+            case .shopify: "Shopify"
             }
         }
 
-        /// Settings chip order: Bag → Store → Cart.
-        static let displayOrder: [Family] = [.bag, .store, .cart]
+        /// Settings chip order: Bag → Store → Cart → Shopify.
+        static let displayOrder: [Family] = [.bag, .store, .cart, .shopify]
     }
 
     var family: Family {
@@ -118,28 +122,30 @@ enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashabl
         case .bag, .bagFilled: .bag
         case .cart, .cartFilled: .cart
         case .store, .storeFilled: .store
+        case .shopify: .shopify
         }
     }
 
+    /// Shopify has only one form — never "filled".
     var isFilled: Bool {
         switch self {
         case .bagFilled, .cartFilled, .storeFilled: true
-        case .bag, .cart, .store: false
+        case .bag, .cart, .store, .shopify: false
         }
     }
 
     var title: String { family.title }
 
-    /// SF Symbol for bag options (nil for Polaris asset glyphs).
+    /// SF Symbol for bag options (nil for Polaris/Shopify asset glyphs).
     var systemSymbolName: String? {
         switch self {
         case .bag: "bag"
         case .bagFilled: "bag.fill"
-        case .cart, .cartFilled, .store, .storeFilled: nil
+        case .cart, .cartFilled, .store, .storeFilled, .shopify: nil
         }
     }
 
-    /// Asset catalog imageset name for Polaris glyphs (nil for SF Symbol bag).
+    /// Asset catalog imageset name for Polaris/Shopify glyphs (nil for SF Symbol bag).
     var assetName: String? {
         switch self {
         case .bag, .bagFilled: nil
@@ -147,6 +153,7 @@ enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashabl
         case .cartFilled: "CartFilledIcon"
         case .store: "StoreIcon"
         case .storeFilled: "StoreFilledIcon"
+        case .shopify: "ShopifyIcon"
         }
     }
 
@@ -158,6 +165,7 @@ enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashabl
         case (.cart, true): .cartFilled
         case (.store, false): .store
         case (.store, true): .storeFilled
+        case (.shopify, _): .shopify
         }
     }
 }
