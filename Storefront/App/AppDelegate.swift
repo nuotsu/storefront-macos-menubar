@@ -470,8 +470,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
 
-        // The button's own highlight sits behind our custom drawing — mirror it so the
-        // glyph and favicon strip stay legible while the menu is up.
+        // The button's own highlight sits behind our custom drawing — mirror it onto the
+        // favicon plate (only) so it stays legible while the menu is up.
         menuBarContentView?.isHighlighted = true
         statusItem?.menu = menu
         statusItem?.button?.performClick(nil)
@@ -916,7 +916,8 @@ private final class MenuBarContentView: NSView {
         }
     }
 
-    /// Mirrors the host button's highlight (right-click menu) so drawing stays legible.
+    /// Mirrors the host button's highlight (right-click menu) for the favicon plate only —
+    /// the glyph itself keeps its normal tint so it doesn't flash white on right-click.
     var isHighlighted = false {
         didSet { needsDisplay = true }
     }
@@ -996,9 +997,7 @@ private final class MenuBarContentView: NSView {
         // which can read slightly gray / off-white in the menu bar.
         effectiveAppearance.performAsCurrentDrawingAppearance {
             let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            let tint: NSColor = isHighlighted
-                ? .selectedMenuItemTextColor
-                : (isDark ? .white : .black)
+            let tint: NSColor = isDark ? .white : .black
             drawGlyph(tint: tint)
 
             guard let groupFrame else { return }
