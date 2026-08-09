@@ -14,7 +14,7 @@ struct StoreRailView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 0) {
             searchField
                 .padding(.bottom, 7)
 
@@ -65,8 +65,9 @@ struct StoreRailView: View {
                         .contentShape(Rectangle())
                         .modifier(PanelWindowDragModifier(enabled: isFloatingPanel))
                 }
+                .padding(.vertical, 4)
             }
-            .padding(.vertical, 4)
+            .scrollIndicators(.hidden)
             .frame(maxHeight: .infinity)
 
             Divider().overlay(chrome.isShopify ? Theme.Shopify.hairline : Theme.hairline)
