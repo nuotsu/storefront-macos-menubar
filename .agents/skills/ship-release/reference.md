@@ -12,6 +12,8 @@ Command cookbook and constants. Read from [SKILL.md](SKILL.md) only when executi
 GitHub remote / releases: `nuotsu/storefront-macos-menubar`  
 Sparkle feed (in Info.plist): `…/releases/latest/download/appcast.xml`
 
+**Asset naming contract:** DMG is always `Storefront.dmg` (never versioned). Site + Sparkle use `…/releases/latest/download/Storefront.dmg` (`web/src/lib/download-macos.ts`). Only the dSYM zip includes the version: `Storefront-X.Y.Z.dSYM.zip`.
+
 ## Gather
 
 ```bash
@@ -137,6 +139,9 @@ gh release create vX.Y.Z \
 Sparkle auto-update from PREV should offer this build.
 EOF
 )"
+
+# Must list Storefront.dmg (never Storefront-X.Y.Z.dmg)
+gh release view vX.Y.Z --json assets --jq '.assets[].name'
 ```
 
 ## Sanity

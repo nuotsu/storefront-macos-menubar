@@ -115,6 +115,9 @@ Repo: `nuotsu/storefront-macos-menubar`
 1. `git push -u origin HEAD`
 2. Annotated tag `vX.Y.Z`, push the tag
 3. `gh release create vX.Y.Z dist/Storefront.dmg dist/appcast.xml dist/Storefront-X.Y.Z.dSYM.zip --title "Storefront vX.Y.Z" --notes "…"` using the **approved** notes
+4. Verify assets: `gh release view vX.Y.Z --json assets --jq '.assets[].name'` must list `Storefront.dmg` (and must not list a versioned DMG)
+
+**Hard rule — DMG filename:** upload as **`Storefront.dmg` only** — never `Storefront-X.Y.Z.dmg` or any other name. Sparkle, README, and the site download (`web/src/lib/download-macos.ts` → `MACOS_DMG_URL`) all depend on the stable `…/releases/latest/download/Storefront.dmg` URL. Only the dSYM zip is versioned (`Storefront-X.Y.Z.dSYM.zip`).
 
 All three assets ship every release. Never force-push tags. Never `--no-verify`.
 
