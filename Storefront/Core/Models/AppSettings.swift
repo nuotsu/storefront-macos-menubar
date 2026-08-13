@@ -254,7 +254,7 @@ struct AppSettings: Codable, Equatable {
     /// When false, the bag status item is removed from the menu bar. Toggle off/on to recreate a missing icon.
     var showInMenuBar: Bool = true
     /// When true, the app uses a regular activation policy and appears in the Dock.
-    var showInDock: Bool = false
+    var showInDock: Bool = true
     /// When true, the widget opens as a floating panel under the pointer instead of
     /// attaching to the menu bar icon. Ignored (effectively always on) when the menu
     /// bar icon is hidden.
@@ -307,7 +307,7 @@ extension AppSettings {
         enabledSections = try c.decodeIfPresent(Set<SectionID>.self, forKey: .enabledSections) ?? Set(SectionID.allCases)
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
         showInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showInMenuBar) ?? true
-        showInDock = try c.decodeIfPresent(Bool.self, forKey: .showInDock) ?? false
+        showInDock = try c.decodeIfPresent(Bool.self, forKey: .showInDock) ?? true
         openUnderMouse = try c.decodeIfPresent(Bool.self, forKey: .openUnderMouse) ?? false
         showStarredStoresInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showStarredStoresInMenuBar) ?? true
         appearancePreference = try c.decodeIfPresent(AppearancePreference.self, forKey: .appearancePreference) ?? .system
