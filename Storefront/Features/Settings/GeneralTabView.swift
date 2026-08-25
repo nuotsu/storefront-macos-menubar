@@ -22,6 +22,21 @@ struct GeneralTabView: View {
 
                     SettingsGroupedDivider()
 
+                    SettingsGroupedRow("Show in Dock") {
+                        Toggle(
+                            "",
+                            isOn: Binding(
+                                get: { appState.settings.showInDock },
+                                set: { AppDelegate.shared?.setShowInDock($0) }
+                            )
+                        )
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                    }
+
+                    SettingsGroupedDivider()
+
                     SettingsGroupedRow("Show in menu bar") {
                         Toggle(
                             "",
@@ -68,21 +83,6 @@ struct GeneralTabView: View {
                         .toggleStyle(.switch)
                         .controlSize(.small)
                         .disabled(!appState.settings.showInMenuBar)
-                    }
-
-                    SettingsGroupedDivider()
-
-                    SettingsGroupedRow("Show in Dock") {
-                        Toggle(
-                            "",
-                            isOn: Binding(
-                                get: { appState.settings.showInDock },
-                                set: { AppDelegate.shared?.setShowInDock($0) }
-                            )
-                        )
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
                     }
                 }
 
