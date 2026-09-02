@@ -89,6 +89,9 @@ struct CaretTintedTextField: NSViewRepresentable {
     var caretColor: NSColor
     var fontSize: CGFloat = 11.5
     var onSubmit: () -> Void = {}
+    /// Bumped (non-zero) to select the entire contents once the field can take focus —
+    /// used after ⌃S so leftover query text is replace-ready.
+    var selectAllGeneration: UInt = 0
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -108,10 +111,24 @@ struct CaretTintedTextField: NSViewRepresentable {
         if nsView.string != text {
             nsView.string = text
         }
+        if selectAllGeneration != 0,
+           selectAllGeneration != context.coordinator.lastSelectAllGeneration
+        {
+            context.coordinator.lastSelectAllGeneration = selectAllGeneration
+            // Don't call makeFirstResponder here — that bypasses SwiftUI `@FocusState` and
+            // leaves AppKit focus stranded after the field is torn down (⌃S collapse),
+            // which silently kills panel `.onKeyPress` (arrows included). Selection is
+            // applied after FocusState has already focused this view.
+            DispatchQueue.main.async {
+                guard !nsView.string.isEmpty else { return }
+                nsView.selectAll(nil)
+            }
+        }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CaretTintedTextField
+        var lastSelectAllGeneration: UInt = 0
 
         init(_ parent: CaretTintedTextField) {
             self.parent = parent
@@ -186,6 +203,15 @@ final class CaretTintedNSTextView: NSTextView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         syncLayoutMetrics()
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        // Leaving the hierarchy while first responder leaves AppKit with nil focus;
+        // resign explicitly so the panel can reclaim `.onKeyPress`.
+        if newWindow == nil, let window, window.firstResponder === self {
+            window.makeFirstResponder(window.contentView)
+        }
+        super.viewWillMove(toWindow: newWindow)
     }
 
     /// Vertical centering via equal top/bottom container inset; horizontal flush. Same

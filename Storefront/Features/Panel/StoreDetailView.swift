@@ -759,7 +759,10 @@ private struct CardLinkRow: View {
                     CaretTintedTextField(
                         text: searchQuery,
                         caretColor: searchCaretColor,
-                        onSubmit: submitSearch
+                        onSubmit: submitSearch,
+                        selectAllGeneration: appState.linkSearchSelectAllRowID == row.id
+                            ? appState.linkSearchSelectAllGeneration
+                            : 0
                     )
                         .focused(focusedRowSearchID, equals: row.id)
                         .focusEffectDisabled()

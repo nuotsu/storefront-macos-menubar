@@ -186,12 +186,19 @@ struct PanelView: View {
     private func moveKeyboardFocusToPanel() {
         focusedRowSearchID = nil
         searchFocused = false
-        panelFocused = true
-        // If clearing a row-search focus synchronously re-focuses the rail search via
-        // `onChange`, win on the next turn.
+        // Must drop to `false` before the next-turn `true`. Setting `true` while a row
+        // search `NSTextView` is still first responder fails silently; a later
+        // `panelFocused = true` is then a no-op and `.onKeyPress` dies (no arrows).
+        panelFocused = false
         DispatchQueue.main.async {
-            searchFocused = false
-            panelFocused = true
+            self.searchFocused = false
+            self.focusedRowSearchID = nil
+            // Same park as `AppDelegate.showFloatingPanel` — hosting view must be
+            // AppKit first responder before SwiftUI focus can attach.
+            if let window = NSApp.keyWindow {
+                window.makeFirstResponder(window.contentView)
+            }
+            self.panelFocused = true
         }
     }
 
@@ -213,6 +220,9 @@ struct PanelView: View {
 
     /// Shared by panel `onKeyPress` and the row-search `TextField` (which can swallow ⌃S
     /// before it bubbles). Returns whether the shortcut was applicable.
+    ///
+    /// Cycle: collapsed → expand+focus; expanded but unfocused → focus only;
+    /// expanded and focused → collapse.
     @discardableResult
     private func performToggleLinkSearch() -> Bool {
         // Block only while typing in the rail store search with no active card link.
@@ -221,23 +231,39 @@ struct PanelView: View {
         if searchFocused && focusedRowSearchID == nil && appState.focusArea != .cards {
             return false
         }
+        guard let rowID = appState.focusedSearchableRowID() else { return false }
+
+        // Already open but caret isn't in the field (e.g. arrowed onto a row left expanded):
+        // focus first; don't collapse until a later ⌃S while focused.
+        if appState.isFocusedLinkSearchExpanded(), focusedRowSearchID != rowID {
+            suppressRailSearchRefocus = false
+            focusLinkSearchField(rowID, selectAll: true)
+            return true
+        }
+
         guard let result = appState.toggleSearchForFocusedLink() else { return false }
         if result.isNowExpanded {
             suppressRailSearchRefocus = false
-            focusLinkSearchField(result.rowID)
+            focusLinkSearchField(result.rowID, selectAll: true)
         } else {
+            // Keep suppress up until panel focus has re-attached on the next turn —
+            // clearing it in the same async flush as `moveKeyboardFocusToPanel` can let
+            // `onChange(focusedRowSearchID)` bounce focus onto the rail search.
             suppressRailSearchRefocus = true
             moveKeyboardFocusToPanel()
             DispatchQueue.main.async {
-                suppressRailSearchRefocus = false
+                DispatchQueue.main.async {
+                    suppressRailSearchRefocus = false
+                }
             }
         }
         return true
     }
 
     /// Puts the caret in the expanded row search — sync + next-turn so the field exists
-    /// in the hierarchy after expand before `@FocusState` commits.
-    private func focusLinkSearchField(_ rowID: String) {
+    /// in the hierarchy after expand before `@FocusState` commits. When `selectAll` is
+    /// set, leftover query text is selected so typing replaces it.
+    private func focusLinkSearchField(_ rowID: String, selectAll: Bool = false) {
         panelFocused = false
         searchFocused = false
         focusedRowSearchID = rowID
@@ -245,6 +271,9 @@ struct PanelView: View {
             self.panelFocused = false
             self.searchFocused = false
             self.focusedRowSearchID = rowID
+            if selectAll {
+                self.appState.requestLinkSearchSelectAll(rowID: rowID)
+            }
         }
     }
 

@@ -93,6 +93,10 @@ final class AppState {
     /// (which tears down and recreates `CardLinkRow`, discarding any local `@State`)
     /// doesn't lose what the user typed.
     var searchQueries: [Store.ID: [String: String]] = [:]
+    /// Paired with `linkSearchSelectAllGeneration` — the row whose search field should
+    /// select-all after a ⌃S focus so leftover query text is replace-ready.
+    var linkSearchSelectAllRowID: String?
+    var linkSearchSelectAllGeneration: UInt = 0
 
     @ObservationIgnored private let persistence: PersistenceStore
     /// In-flight debounced store write — see `scheduleSaveStores()`.
@@ -369,9 +373,28 @@ final class AppState {
         openStoreLink(url, keepOpen: false)
     }
 
+    /// Focused card row id when that row supports inline search; else `nil`.
+    func focusedSearchableRowID() -> String? {
+        guard let row = focusedRow, row.supportsSearch else { return nil }
+        return row.id
+    }
+
+    /// Whether the focused searchable row's search field is currently expanded.
+    func isFocusedLinkSearchExpanded() -> Bool {
+        guard let store = selectedStore, let rowID = focusedSearchableRowID() else { return false }
+        return expandedSearchRowIDs[store.id]?.contains(rowID) ?? false
+    }
+
+    /// Ask the matching row search field to select its contents (after focus settles).
+    func requestLinkSearchSelectAll(rowID: String) {
+        linkSearchSelectAllRowID = rowID
+        linkSearchSelectAllGeneration &+= 1
+    }
+
     /// Toggles the focused row's inline search field, if it supports search. Returns
     /// the row's id and its new expanded state so the caller (which owns the `@FocusState`
     /// needed to actually focus the field) can react — `nil` if the focused row can't search.
+    /// Expand/collapse only — focus-first when already open is handled by the panel.
     @discardableResult
     func toggleSearchForFocusedLink() -> (rowID: String, isNowExpanded: Bool)? {
         guard let store = selectedStore, let row = focusedRow, row.supportsSearch else { return nil }
