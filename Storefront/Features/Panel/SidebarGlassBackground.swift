@@ -1,14 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// Floating sidebar / header chrome — prefers macOS 26 `NSGlassEffectView`, falls back to
+/// Sidebar / card / header chrome — prefers macOS 26 `NSGlassEffectView`, falls back to
 /// `NSVisualEffectView` (cmux `SidebarVisualEffectBackground` recipe).
 ///
 /// Always installed as a **background**: the representable’s root view returns `nil`
 /// from `hitTest` so AppKit cannot steal clicks from SwiftUI controls on top
 /// (same failure mode as `MouseTrackingOverlay` without a passthrough `hitTest`).
 struct SidebarGlassBackground: NSViewRepresentable {
-    var cornerRadius: CGFloat = Theme.railCornerRadius
+    var cornerRadius: CGFloat = 0
     var material: NSVisualEffectView.Material = .sidebar
     var blendingMode: NSVisualEffectView.BlendingMode = .withinWindow
 
@@ -83,6 +83,13 @@ struct SidebarGlassBackground: NSViewRepresentable {
         view.layer?.cornerRadius = cornerRadius
         view.layer?.cornerCurve = .continuous
         view.layer?.masksToBounds = cornerRadius > 0
+        // `NSGlassEffectView` draws its own rounded shape; the layer radius alone
+        // doesn't square it off.
+        if view.className == "NSGlassEffectView",
+           view.responds(to: NSSelectorFromString("setCornerRadius:"))
+        {
+            view.setValue(cornerRadius, forKey: "cornerRadius")
+        }
     }
 
     /// Regular (frosted) liquid-glass style — the only style call sites use.

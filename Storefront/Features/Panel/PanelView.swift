@@ -44,7 +44,13 @@ struct PanelView: View {
     private var panelChromeBackground: some View {
         switch widgetChrome {
         case .shopify:
-            Theme.Shopify.pageBackground
+            // Dark strip bleeds past the rail so the sheet’s rounded leading corners
+            // reveal sidebar, while the popover beak (over the detail column) stays page gray.
+            ZStack(alignment: .leading) {
+                Theme.Shopify.pageBackground
+                Theme.Shopify.Sidebar.fill
+                    .frame(width: Theme.railWidth + Theme.contentSheetCornerRadius)
+            }
         case .macOSOpaque:
             Theme.panelOpaqueFill
         case .macOSGlass:
@@ -67,38 +73,30 @@ struct PanelView: View {
     /// preference never committed a non-zero value through the conditionally-built
     /// (`if store != nil { … } else { … }`) content above it.
     private var rightPanelFrame: CGRect {
-        let originX = Theme.railInset + Theme.railWidth + Theme.railGap
+        let originX = Theme.railWidth
         return CGRect(x: originX, y: 0, width: Theme.panelSize.width - originX, height: Theme.panelSize.height)
     }
 
     var body: some View {
-        HStack(spacing: Theme.railGap) {
+        HStack(spacing: 0) {
             StoreRailView(searchFocused: $searchFocused)
-                .padding(.leading, Theme.railInset)
-                .padding(.vertical, Theme.railInset)
-                // Edge-ring void (rail insets): drag without changing layout. Rail controls
-                // sit above this and keep their own hits.
-                .background {
-                    if isFloatingPanel {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .modifier(PanelWindowDragModifier(enabled: true))
-                    }
-                }
 
-            if let store = appState.selectedStore {
-                // Keep identity across hover-select so the detail column updates in place
-                // instead of tearing down cards/favicons on every rail scrub.
-                StoreDetailView(
-                    store: store,
-                    focusedRowSearchID: $focusedRowSearchID,
-                    onToggleLinkSearchKey: { performToggleLinkSearch() }
-                )
-            } else {
-                emptyState
-                    .contentShape(Rectangle())
-                    .modifier(PanelWindowDragModifier(enabled: isFloatingPanel))
+            Group {
+                if let store = appState.selectedStore {
+                    // Keep identity across hover-select so the detail column updates in place
+                    // instead of tearing down cards/favicons on every rail scrub.
+                    StoreDetailView(
+                        store: store,
+                        focusedRowSearchID: $focusedRowSearchID,
+                        onToggleLinkSearchKey: { performToggleLinkSearch() }
+                    )
+                } else {
+                    emptyState
+                        .contentShape(Rectangle())
+                        .modifier(PanelWindowDragModifier(enabled: isFloatingPanel))
+                }
             }
+            .modifier(ShopifyContentSheetModifier(enabled: widgetChrome.isShopify))
         }
         .coordinateSpace(name: "panel")
         .background(
@@ -389,6 +387,26 @@ struct PanelView: View {
                 .foregroundStyle(shopify ? Theme.Shopify.textSecondary : Theme.textSecondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Shopify detail column as a light sheet with rounded leading corners over the dark sidebar.
+private struct ShopifyContentSheetModifier: ViewModifier {
+    let enabled: Bool
+
+    func body(content: Content) -> some View {
+        if enabled {
+            let shape = UnevenRoundedRectangle(
+                topLeadingRadius: Theme.contentSheetCornerRadius,
+                bottomLeadingRadius: Theme.contentSheetCornerRadius,
+                style: .circular
+            )
+            content
+                .background(Theme.Shopify.pageBackground)
+                .clipShape(shape)
+        } else {
+            content
+        }
     }
 }
 

@@ -6,6 +6,7 @@ struct StoreFaviconView: View {
     let store: Store
     var size: CGFloat = 18
     @Environment(AppState.self) private var appState
+    @Environment(\.colorScheme) private var colorScheme
 
     @ObservedObject private var favicons = FaviconStore.shared
 
@@ -21,7 +22,9 @@ struct StoreFaviconView: View {
                     .resizable()
                     .interpolation(.high)
                     .scaledToFill()
-                    .background(Theme.faviconPlate)
+                    // Environment scheme (not `Theme.faviconPlate`'s app appearance) so the
+                    // dark Shopify sidebar gets a plate inside the light-locked widget.
+                    .background(colorScheme == .dark ? Color.white : Color.clear)
             } else {
                 initialsFallback
             }

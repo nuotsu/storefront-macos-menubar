@@ -4,6 +4,7 @@ struct StoreRailView: View {
     @Environment(AppState.self) private var appState
     @Environment(SafeTriangleController.self) private var safeTriangle
     @FocusState.Binding var searchFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     private var chrome: WidgetChrome {
         WidgetChrome.current(settings: appState.settings)
@@ -22,7 +23,7 @@ struct StoreRailView: View {
                 // Count only — `visibleStores` would also sort, which nothing here needs.
                 Text("\(appState.stores.lazy.filter(\.isVisible).count) Stores")
                     .font(.panel(11, shopify: chrome.isShopify))
-                    .foregroundStyle(chrome.isShopify ? Theme.Shopify.textMeta : Theme.textMeta36)
+                    .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta36)
                 Spacer(minLength: 4)
                 if appState.focusArea == .rail {
                     HStack(spacing: 0) {
@@ -30,7 +31,7 @@ struct StoreRailView: View {
                         Image(systemName: "arrow.down")
                     }
                     .font(.panel(8, weight: .medium, shopify: chrome.isShopify))
-                    .foregroundStyle(chrome.isShopify ? Theme.Shopify.textMeta : Theme.textMeta25)
+                    .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta25)
                     .contentShape(Rectangle())
                     .hoverTooltip("Navigate stores")
                 }
@@ -41,7 +42,7 @@ struct StoreRailView: View {
             .contentShape(Rectangle())
             .modifier(PanelWindowDragModifier(enabled: isFloatingPanel))
 
-            Divider().overlay(chrome.isShopify ? Theme.Shopify.hairline : Theme.hairline)
+            Divider().overlay(chrome.isShopify ? Theme.Shopify.Sidebar.hairline : Theme.hairline)
 
             ScrollView {
                 let stores = appState.filteredStores
@@ -70,7 +71,7 @@ struct StoreRailView: View {
             .scrollIndicators(.hidden)
             .frame(maxHeight: .infinity)
 
-            Divider().overlay(chrome.isShopify ? Theme.Shopify.hairline : Theme.hairline)
+            Divider().overlay(chrome.isShopify ? Theme.Shopify.Sidebar.hairline : Theme.hairline)
 
             navigationLegend
         }
@@ -81,11 +82,11 @@ struct StoreRailView: View {
             ZStack {
                 switch chrome {
                 case .shopify:
-                    Theme.Shopify.surface
+                    Theme.Shopify.Sidebar.fill
                 case .macOSOpaque:
                     Theme.panelOpaqueElevatedFill
                 case .macOSGlass:
-                    SidebarGlassBackground(cornerRadius: Theme.railCornerRadius)
+                    SidebarGlassBackground()
                 }
                 // Inner chrome padding / gaps: drag only where no control claims the hit.
                 if isFloatingPanel {
@@ -95,20 +96,16 @@ struct StoreRailView: View {
                 }
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.railCornerRadius, style: chrome.cornerStyle))
-        .floatingCardChrome(
-            chrome: chrome,
-            cornerRadius: Theme.railCornerRadius,
-            macOSShadowRadius: 4,
-            macOSShadowY: 1.5
-        )
+        // Dark Shopify nav inside a light-locked widget: resolves the text field, caret,
+        // and adaptive favicon plates for a dark surface.
+        .environment(\.colorScheme, chrome.isShopify ? .dark : colorScheme)
     }
 
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.panel(10, shopify: chrome.isShopify))
-                .foregroundStyle(chrome.isShopify ? Theme.Shopify.textMeta : Theme.textMeta30)
+                .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta30)
                 .allowsHitTesting(false)
             // Custom placeholder: AppKit's cell placeholder jumps when the field editor
             // attaches on focus; a SwiftUI label stays put.
@@ -116,7 +113,7 @@ struct StoreRailView: View {
                 if appState.query.isEmpty {
                     Text("Search stores")
                         .font(.panel(11.5, shopify: chrome.isShopify))
-                        .foregroundStyle(chrome.isShopify ? Theme.Shopify.textMeta : Theme.textMeta30)
+                        .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta30)
                         .allowsHitTesting(false)
                 }
             TextField("", text: Binding(
@@ -135,17 +132,17 @@ struct StoreRailView: View {
                 combo: appState.settings.focusSearchHotkey,
                 font: .panel(8, shopify: chrome.isShopify)
             )
-                .foregroundStyle(chrome.isShopify ? Theme.Shopify.textMeta : Theme.textMeta25)
+                .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta25)
                 .allowsHitTesting(false)
         }
         .padding(.horizontal, 8)
         .frame(height: 26)
-        .background(chrome.isShopify ? Theme.Shopify.searchFill : Theme.searchFill)
+        .background(chrome.isShopify ? Theme.Shopify.Sidebar.searchFill : Theme.searchFill)
         .clipShape(RoundedRectangle(cornerRadius: chrome.isShopify ? 8 : 6, style: chrome.cornerStyle))
         .overlay {
             if chrome.isShopify {
                 RoundedRectangle(cornerRadius: 8, style: .circular)
-                    .strokeBorder(Theme.Shopify.searchBorder, lineWidth: 1)
+                    .strokeBorder(Theme.Shopify.Sidebar.searchBorder, lineWidth: 1)
             }
         }
         .contentShape(Rectangle())
@@ -207,14 +204,14 @@ private struct LegendLinkRow: View {
 
     private var contentColor: Color {
         if isShopify {
-            return isHovering ? Theme.Shopify.textPrimary : Theme.Shopify.textSecondary
+            return isHovering ? Theme.Shopify.Sidebar.textPrimary : Theme.Shopify.Sidebar.textSecondary
         }
         return isHovering ? Theme.textBody : Theme.textMeta36
     }
 
     private var iconColor: Color {
         if isShopify {
-            return isHovering ? Theme.Shopify.textPrimary : Theme.Shopify.textMeta
+            return isHovering ? Theme.Shopify.Sidebar.textPrimary : Theme.Shopify.Sidebar.textMeta
         }
         return isHovering ? Theme.textBody : Theme.textMeta30
     }
@@ -239,7 +236,7 @@ private struct LegendLinkRow: View {
                     }
                     .foregroundStyle(
                         isShopify
-                            ? Theme.Shopify.textMeta
+                            ? Theme.Shopify.Sidebar.textMeta
                             : (isHovering ? Theme.textMeta36 : Theme.textMeta25)
                     )
                 }
@@ -247,7 +244,7 @@ private struct LegendLinkRow: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isHovering ? (isShopify ? Theme.Shopify.hoverFill : Theme.hoverFill) : Color.clear)
+            .background(isHovering ? (isShopify ? Theme.Shopify.Sidebar.hoverFill : Theme.hoverFill) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 5, style: isShopify ? .circular : .continuous))
             .contentShape(Rectangle())
         }
@@ -312,7 +309,7 @@ private struct StoreRowView: View, Equatable {
                     .font(.panel(12.5, shopify: isShopify))
                     .foregroundStyle(
                         isShopify
-                            ? Theme.Shopify.textPrimary
+                            ? Theme.Shopify.Sidebar.textPrimary
                             : (isSelected ? Theme.textPrimary : Theme.textBody)
                     )
                     .lineLimit(1)
@@ -397,12 +394,13 @@ private struct StoreRowView: View, Equatable {
             }
         }
         .frame(width: hasBadge ? Self.badgeWidth : 0, alignment: .trailing)
-        .foregroundStyle(isShopify ? Theme.Shopify.textMeta : Theme.textMeta25)
+        .foregroundStyle(isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta25)
     }
 
     private var rowBackground: Color {
         if isShopify {
-            if isSelected || effectiveHovering { return Theme.Shopify.hoverFill }
+            if isSelected { return Theme.Shopify.Sidebar.selectedFill }
+            if effectiveHovering { return Theme.Shopify.Sidebar.hoverFill }
             return .clear
         }
         if isSelected { return Theme.controlFill }
@@ -425,7 +423,7 @@ private struct FavoriteButton: View {
             .font(.panel(10, shopify: isShopify))
             .foregroundStyle(
                 isShopify
-                    ? (isFavorite ? Theme.Shopify.textPrimary : Theme.Shopify.textMeta)
+                    ? (isFavorite ? Theme.Shopify.Sidebar.textPrimary : Theme.Shopify.Sidebar.textMeta)
                     : (isFavorite ? Theme.textPrimary : Theme.textMeta30)
             )
             .frame(width: 16, height: 16)

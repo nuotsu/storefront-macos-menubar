@@ -84,17 +84,28 @@ enum Theme {
         /// AppKit fill for the hosting view under SwiftUI.
         static var pageBackgroundNSColor: NSColor { NSColor(hex: "f1f1f1") }
 
-        /// Soft 1px ring on floating rail / section cards.
+        /// Soft 1px ring on section cards.
         static let cardRing = Color(hex: "e2e2e2")
+
+        /// Dark admin nav column (new Shopify admin) — fixed, independent of appearance.
+        enum Sidebar {
+            static let fill = Color(hex: "1a1a1a")
+            static let textPrimary = Color.white
+            static let textSecondary = Color.white.opacity(0.72)
+            static let textMeta = Color.white.opacity(0.55)
+            static let searchFill = Color.white.opacity(0.08)
+            static let searchBorder = Color.white.opacity(0.14)
+            static let hoverFill = Color.white.opacity(0.08)
+            static let selectedFill = Color.white.opacity(0.14)
+            static let hairline = Color.white.opacity(0.1)
+        }
     }
 
     static let panelSize = CGSize(width: 560, height: 520)
+    /// Full-height sidebar, flush with the panel’s top / leading / bottom edges.
     static let railWidth: CGFloat = 186
-    /// Inset around the floating glass rail (leading / top / bottom).
-    static let railInset: CGFloat = 8
-    /// Gap between the floating rail and the detail column.
-    static let railGap: CGFloat = 8
-    static let railCornerRadius: CGFloat = 12
+    /// Shopify detail sheet’s leading corners, revealing the dark sidebar behind them.
+    static let contentSheetCornerRadius: CGFloat = 12
     /// Floating / under-mouse panel chrome corner radius (matches `AppDelegate` window mask).
     static let floatingPanelCornerRadius: CGFloat = 14
 
@@ -108,12 +119,11 @@ enum Theme {
     /// Used to open the detached floating panel under the pointer.
     static var floatingPanelFirstStoreRowCenter: CGPoint {
         // Vertical stack inside the rail (see StoreRailView):
-        // railInset + rail top pad + search(26) + search bottom(7) + spacing(1)
+        // rail top pad + search(26) + search bottom(7) + spacing(1)
         // + stores label(~14) + label bottom(4) + spacing(1) + divider(1) + spacing(1)
         // + scroll top pad(4) + half of first row (~29/2).
         let y =
-            railInset
-            + 8 // rail content top padding
+            8 // rail content top padding
             + 26 // search field height
             + 7 // search bottom padding
             + 1 // VStack spacing
@@ -124,7 +134,7 @@ enum Theme {
             + 1 // spacing
             + 4 // scroll top padding
             + 14.5 // center of first store row
-        let x = railInset + railWidth / 2
+        let x = railWidth / 2
         return CGPoint(x: x, y: y)
     }
 }
