@@ -330,6 +330,12 @@ struct PanelView: View {
             appState.openFocusedCreateLink()
             return .handled
         }
+        if keyPress.modifiers.isDisjoint(with: [.command, .option, .control, .shift]),
+           keyPress.characters.count == 1,
+           let key = keyPress.characters.lowercased().first,
+           appState.openCardLink(shortcut: key) {
+            return .handled
+        }
 
         switch keyPress.key {
         case .upArrow:

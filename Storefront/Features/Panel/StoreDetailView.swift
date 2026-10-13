@@ -145,7 +145,7 @@ struct StoreDetailView: View {
                         iconName: "HomeIcon",
                         background: store.color,
                         foreground: store.accentTextColor,
-                        shortcutLetter: appState.settings.openAdminHotkey.mnemonicLetter
+                        shortcutLabel: appState.settings.openAdminHotkey.mnemonicLetter.map { String($0) }
                     ) {
                         openStoreLink(adminURL)
                     }
@@ -156,7 +156,7 @@ struct StoreDetailView: View {
                         iconName: "StoreIcon",
                         background: store.color.pillBackground(colorScheme: colorScheme),
                         foreground: store.color.pillTextColor(colorScheme: colorScheme),
-                        shortcutLetter: appState.settings.openOnlineStoreHotkey.mnemonicLetter
+                        shortcutLabel: appState.settings.openOnlineStoreHotkey.mnemonicLetter.map { String($0) }
                     ) {
                         openStoreLink(shopURL)
                     }
@@ -167,7 +167,7 @@ struct StoreDetailView: View {
                         iconName: "QuestionCircleIcon",
                         background: store.color.pillBackground(colorScheme: colorScheme),
                         foreground: store.color.pillTextColor(colorScheme: colorScheme),
-                        shortcutLetter: appState.settings.openSupportHotkey.mnemonicLetter
+                        shortcutLabel: appState.settings.openSupportHotkey.mnemonicLetter.map { String($0) }
                     ) {
                         openStoreLink(supportURL)
                     }
@@ -360,26 +360,34 @@ private struct TightDashUnderline: View {
     }
 }
 
-/// Compact dotted underline — round dots, not dashes.
-private struct TightDotUnderline: View {
-    let color: Color
+/// Small keycap hint for a single-key panel shortcut. Fixed light colors in both
+/// appearances so it reads the same on store-colored buttons and card rows.
+struct ShortcutKeyLabel: View {
+    let key: String
+
+    init(_ key: String) {
+        self.key = key
+    }
 
     var body: some View {
-        GeometryReader { geo in
-            // Inset so round caps sit inside the letter’s advance, not past its edges.
-            let inset: CGFloat = 0.75
-            let width = max(0, geo.size.width - inset * 2)
-            Path { path in
-                path.move(to: CGPoint(x: inset, y: 0.5))
-                path.addLine(to: CGPoint(x: inset + width, y: 0.5))
-            }
-            // Near-zero dash + round caps → true dots rather than short dashes.
-            .stroke(color, style: StrokeStyle(lineWidth: 1.25, lineCap: .round, dash: [0.01, 2.25]))
+        // Hidden "W" (widest capital) sets a shared minimum width for single-letter keys.
+        ZStack {
+            Text("W").hidden()
+            Text(key.uppercased())
         }
-        .frame(height: 1)
-        // Sit just under the glyph (overlay `.bottom` already clears the baseline box).
-        .offset(y: -1)
-        .allowsHitTesting(false)
+            .font(.system(size: 8))
+            .foregroundStyle(Color(hex: "7a7a7a"))
+            .padding(.horizontal, 3)
+            .padding(.vertical, 1)
+            .background {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Color(hex: "ececec"))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
+                    }
+            }
+            .fixedSize()
     }
 }
 
@@ -390,9 +398,8 @@ private struct HeaderActionButton: View {
     let iconName: String
     let background: Color
     let foreground: Color
-    /// When set to a letter that appears in `title`, that first match gets a dotted
-    /// underline as a mnemonic for the panel shortcut.
-    var shortcutLetter: Character? = nil
+    /// Single-key panel shortcut shown as a trailing keycap label.
+    var shortcutLabel: String? = nil
     let action: () -> Void
     @Environment(AppState.self) private var appState
 
@@ -426,34 +433,6 @@ private struct HeaderActionButton: View {
         )
     }
 
-    /// Splits `title` around the first case-insensitive match of `shortcutLetter`.
-    private var mnemonicParts: (before: String, letter: String, after: String)? {
-        guard let shortcutLetter,
-              let index = title.firstIndex(where: { $0.lowercased() == String(shortcutLetter).lowercased() })
-        else { return nil }
-        return (
-            String(title[..<index]),
-            String(title[index]),
-            String(title[title.index(after: index)...])
-        )
-    }
-
-    @ViewBuilder
-    private var titledText: some View {
-        if let parts = mnemonicParts {
-            HStack(spacing: 0) {
-                Text(parts.before)
-                Text(parts.letter)
-                    .overlay(alignment: .bottom) {
-                        TightDotUnderline(color: foreground)
-                    }
-                Text(parts.after)
-            }
-        } else {
-            Text(title)
-        }
-    }
-
     var body: some View {
         HStack(spacing: 5) {
             Image(iconName)
@@ -461,8 +440,12 @@ private struct HeaderActionButton: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 13, height: 13)
-            titledText
+            Text(title)
                 .font(.panel(11, weight: .medium, shopify: isShopify))
+            if let shortcutLabel {
+                ShortcutKeyLabel(shortcutLabel)
+                    .padding(.leading, 1)
+            }
         }
         .foregroundStyle(foreground)
         .padding(.horizontal, 9)
@@ -619,8 +602,6 @@ private struct CardLinkRow: View {
             : .controlAccentColor
     }
 
-    private var hasTrailingActions: Bool { row.createAction != nil || row.supportsSearch }
-
     private var isShopify: Bool {
         appState.settings.widgetThemePreference.isShopify
     }
@@ -659,18 +640,12 @@ private struct CardLinkRow: View {
 
                 // Its own tight-spacing group — the outer HStack's spacing (6) only applies
                 // between the link zone and this whole cluster, not within it.
-                // Intrinsic glyph widths + equal hit-only extensions toward a non-interactive
-                // divider: equal visual gap, no dead zone for tooltips/taps.
-                let hasSearch = row.supportsSearch
-                let hasCreate = row.createAction != nil
-                let hasBothTrailingActions = hasSearch && hasCreate
-                let trailingActionHalfGap: CGFloat = 3
+                // Search, +, and key share one fixed slot width and pack flush right, so
+                // columns line up across rows (counted from the trailing edge). Adjacent
+                // slots touch, leaving no dead zone between hit targets.
                 HStack(alignment: .center, spacing: 0) {
-                    if hasSearch {
-                        PillSegment(
-                            isActive: isSearchExpanded,
-                            hitExpandTrailing: hasBothTrailingActions ? trailingActionHalfGap : 0
-                        ) {
+                    if row.supportsSearch {
+                        PillSegment(isActive: isSearchExpanded) {
                             becomeActive()
                             if isSearchExpanded {
                                 appState.expandedSearchRowIDs[store.id]?.remove(row.id)
@@ -694,33 +669,13 @@ private struct CardLinkRow: View {
                             gap: 1
                         )
                     }
-                    if hasBothTrailingActions {
-                        // Zero-width join so search/+ hit expansions meet with no dead strip;
-                        // divider is drawn centered on that join (equal gap each side).
-                        // Slightly stronger than `Theme.divider` / Polaris hairline so it
-                        // still reads against the row’s hover/active fill.
-                        Color.clear
-                            .frame(width: 0, height: 12)
-                            .overlay {
-                                Rectangle()
-                                    .fill(
-                                        isShopify
-                                            ? Color(hex: "d8d8d8")
-                                            : Color.adaptive(light: .black.opacity(0.14), dark: .white.opacity(0.18))
-                                    )
-                                    .frame(width: 1, height: 12)
-                            }
-                            .allowsHitTesting(false)
-                    }
                     if let createAction = row.createAction {
-                        PillSegment(
-                            hitExpandLeading: hasBothTrailingActions ? trailingActionHalfGap : 0
-                        ) {
+                        PillSegment {
                             becomeActive()
                             guard let url = row.createURL(for: store.myshopifyDomain) else { return }
                             openStoreLink(url)
                         } label: {
-                            Text("+")
+                            Image(systemName: "plus")
                                 .font(.panel(10, weight: .medium, shopify: isShopify))
                         }
                         .hoverTooltip(
@@ -729,10 +684,13 @@ private struct CardLinkRow: View {
                             gap: 1
                         )
                     }
+                    if let shortcutKey = row.shortcutKey {
+                        ShortcutKeyLabel(String(shortcutKey))
+                            .frame(width: cardTrailingSlotWidth)
+                    }
                 }
             }
-            .padding(.leading, 6)
-            .padding(.trailing, hasTrailingActions ? 3 : 6)
+            .padding(.horizontal, 6)
             .contentShape(Rectangle())
             .onHover { hovering in
                 pointerInside = hovering
@@ -828,41 +786,30 @@ private struct CardLinkRow: View {
     }
 }
 
+/// Shared width of each trailing card-row slot (search, +, shortcut key).
+private let cardTrailingSlotWidth: CGFloat = 16
+
 /// One "+" or search tap target — a bare glyph, neutral-colored like the row's own
 /// leading icon, with no pill background of its own. Stretches to the row's full height
 /// (via `frame` before `contentShape`, so the hit area actually grows with it, not just
 /// the glyph) so there's no dead space above/below it that would otherwise fall through
 /// to the row's own link tap gesture.
-///
-/// `hitExpandLeading` / `hitExpandTrailing` add clear space that is part of the hit
-/// target (and tooltip hover) without changing the glyph’s own padding — used so
-/// search/+ meet across a non-interactive divider.
 private struct PillSegment<Label: View>: View {
     var isActive: Bool = false
-    var hitExpandLeading: CGFloat = 0
-    var hitExpandTrailing: CGFloat = 0
     let action: () -> Void
     @ViewBuilder let label: () -> Label
     @Environment(AppState.self) private var appState
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            if hitExpandLeading > 0 {
-                Color.clear.frame(width: hitExpandLeading)
-            }
-            label()
-                .foregroundStyle(
-                    appState.settings.widgetThemePreference.isShopify
-                        ? (isHovering || isActive ? Theme.Shopify.textPrimary : Theme.Shopify.textMeta)
-                        : (isHovering || isActive ? Theme.textBody : Theme.textMeta40)
-                )
-                .padding(.horizontal, 2)
-            if hitExpandTrailing > 0 {
-                Color.clear.frame(width: hitExpandTrailing)
-            }
-        }
-        .frame(maxHeight: .infinity)
+        label()
+            .foregroundStyle(
+                appState.settings.widgetThemePreference.isShopify
+                    ? (isHovering || isActive ? Theme.Shopify.textPrimary : Theme.Shopify.textMeta)
+                    : (isHovering || isActive ? Theme.textBody : Theme.textMeta40)
+            )
+            .frame(width: cardTrailingSlotWidth)
+            .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .onTapGesture(perform: action)

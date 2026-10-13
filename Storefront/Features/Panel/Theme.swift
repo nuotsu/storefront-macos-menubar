@@ -101,7 +101,7 @@ enum Theme {
         }
     }
 
-    static let panelSize = CGSize(width: 560, height: 520)
+    static let panelSize = CGSize(width: 640, height: 520)
     /// Full-height sidebar, flush with the panel’s top / leading / bottom edges.
     static let railWidth: CGFloat = 186
     /// Shopify detail sheet’s leading corners, revealing the dark sidebar behind them.

@@ -355,6 +355,17 @@ final class AppState {
         openStoreLink(url, keepOpen: false)
     }
 
+    /// Opens the visible card link bound to a bare-letter shortcut. Returns whether one matched.
+    @discardableResult
+    func openCardLink(shortcut key: Character) -> Bool {
+        guard let store = selectedStore,
+              let match = StaticLinkCatalog.row(forShortcut: key, in: enabledSections),
+              let url = match.row.url(for: store.myshopifyDomain) else { return false }
+        focusCardLink(section: match.section, rowIndex: match.rowIndex)
+        openStoreLink(url, keepOpen: false)
+        return true
+    }
+
     /// Opens the selected store's admin (panel shortcut; closes the panel).
     func openSelectedAdmin() {
         guard let url = selectedStore?.adminURL else { return }
