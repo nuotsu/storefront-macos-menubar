@@ -306,7 +306,7 @@ private struct CopyableHandleView: View {
             }
             Image(systemName: "checkmark")
                 .font(.panel(9, weight: .bold, shopify: isShopify))
-                .foregroundStyle(accentColor)
+                .foregroundStyle(isShopify ? Theme.Shopify.iconSuccess : accentColor)
                 .opacity(didCopy ? 1 : 0)
         }
         .animation(.easeOut(duration: 0.15), value: didCopy)

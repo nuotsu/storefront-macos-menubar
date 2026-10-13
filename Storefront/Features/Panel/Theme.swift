@@ -81,6 +81,8 @@ enum Theme {
         static let textPrimary = Color(hex: "303030")
         static let textSecondary = Color(hex: "616161")
         static let textMeta = Color(hex: "8a8a8a")
+        /// Copy-confirmation checkmark. Polaris `color-icon-success`.
+        static let iconSuccess = Color(hex: "29845a")
         /// AppKit fill for the hosting view under SwiftUI.
         static var pageBackgroundNSColor: NSColor { NSColor(hex: "f1f1f1") }
 
