@@ -134,7 +134,7 @@ gh release create vX.Y.Z \
   --notes "$(cat <<'EOF'
 ## What's new
 
-- **Feature** — description
+- **Feature**: description
 
 Sparkle auto-update from PREV should offer this build.
 EOF
@@ -202,9 +202,48 @@ Same auth/API as the version script. Typical flow:
 4. `POST` a `createOrReplace` (strip `_rev` / `_updatedAt` / `_createdAt` first) or a `patch` with `set` paths.
 5. Refetch and confirm both surfaces match the approved copy.
 
-Do not leave Docs copy updates as unpublished drafts when shipping a release — publish via the mutate API the same way version bumps land.
+Do not leave Docs copy updates as unpublished drafts when shipping a release. Publish via the mutate API the same way version bumps land.
 
-### Live checks (allow ~30s for CDN/ISR)
+Keyed patch pattern (used in v0.0.17). `PK` is the prose module `_key`; block and span keys come from the fetch above:
+
+```bash
+python3 -I - <<'PY'
+import json, pathlib, urllib.request, secrets
+token = json.loads((pathlib.Path.home() / ".config/sanity/config.json").read_text())["authToken"]
+DOC = "b947dba6-bbda-4671-b30c-56552a468f51"
+PK = "<prose module _key>"
+base = f'modules[_key=="{PK}"].content'
+k = lambda: secrets.token_hex(6)
+new_md = "<full markdown.code with the same edits applied>"
+mutations = [{"patch": {
+    "id": DOC,
+    # reword a span
+    "set": {
+        f'{base}[_key=="<block>"].children[_key=="<span>"].text': ": new wording",
+        "markdown.code": new_md,
+    },
+    # add bullets after an existing block
+    "insert": {"after": f'{base}[_key=="<block>"]', "items": [
+        {"_key": k(), "_type": "block", "style": "normal", "listItem": "bullet", "level": 1, "markDefs": [],
+         "children": [{"_key": k(), "_type": "span", "marks": ["code"], "text": "P"},
+                      {"_key": k(), "_type": "span", "marks": [], "text": ": Products"}]},
+    ]},
+    # remove a block
+    "unset": [f'{base}[_key=="<block>"]'],
+}}]
+req = urllib.request.Request(
+    "https://esz74z9f.api.sanity.io/v2024-01-01/data/mutate/production",
+    data=json.dumps({"mutations": mutations}).encode(),
+    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    method="POST",
+)
+print(urllib.request.urlopen(req).read().decode())
+PY
+```
+
+Bullets in `markdown.code` are separated by blank lines (`- item\n\n- item`); match that when editing the string.
+
+### Live checks (poll; do not use a bare long sleep)
 
 ```bash
 curl -sS 'https://storefront.nuotsu.dev/' | rg -o 'v0\.0\.[0-9]+' | sort | uniq -c
@@ -212,6 +251,24 @@ curl -sS 'https://storefront.nuotsu.dev/docs' | rg -o 'v0\.0\.[0-9]+' | sort | u
 curl -sS 'https://storefront.nuotsu.dev/docs.md' | head -n 40
 # If Docs copy changed, also spot-check new wording:
 # curl -sS 'https://storefront.nuotsu.dev/docs.md' | rg -n 'relevant phrase'
+
+# Poll /docs for the stale footer version (about 3 minutes max)
+OLD=0.0.16
+for i in $(seq 1 12); do
+  curl -sS 'https://storefront.nuotsu.dev/docs' | grep -q "v$OLD" || { echo "fresh after try $i"; break; }
+  sleep 15
+done
+curl -sSI 'https://storefront.nuotsu.dev/docs' | grep -i '^age\|x-vercel-cache'
+```
+
+### Stale /docs footer: force a redeploy
+
+Expected every release. If `/docs` still shows `vOLD` after polling, the footer HTML is cached at Vercel's edge (`x-vercel-cache: HIT`). Push an empty commit, then poll again (allow up to ~5 minutes for the build):
+
+```bash
+git commit --allow-empty -m "Refresh production cache after vX.Y.Z Sanity update." \
+  -m "Vercel's edge cache was still serving the vOLD footer on /docs after the Sanity mutation."
+git push
 ```
 
 Callout version lives in modules PT (`Latest: vX.Y.Z`); `/docs.md` usually has **no** hardcoded app version in the body. Ignore `SanityPress v0.0.127` in `<meta name="generator">` — that is the site template, not the macOS app.

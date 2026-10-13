@@ -22,11 +22,11 @@ Copy and track:
 ```
 Release progress:
 - [ ] 1. Gather commits + current version
-- [ ] 2. Draft notes + docs copy + proposed version (STOP for approval)
+- [ ] 2. Docs impact scan + draft notes + docs copy + proposed version (STOP for approval)
 - [ ] 3. Bump version files + xcodegen
 - [ ] 4. Release build → notarize DMG → generate appcast → archive dSYM
 - [ ] 5. Commit, push, tag, gh release (DMG + appcast + dSYM)
-- [ ] 6. Update Sanity versions + docs copy + verify live site
+- [ ] 6. Update Sanity versions + docs copy + verify live site (redeploy if /docs is stale)
 ```
 
 ## Step 1 — Gather
@@ -53,20 +53,36 @@ Default version bump: patch on the third number (`0.0.N` → `0.0.N+1`, build `N
 
 ### Release notes
 
-Draft GitHub release notes in this shape only — bold lead-in, em dash, user-facing bullets from the actual diff. Do not invent items.
+Draft GitHub release notes in this shape only: bold lead-in, colon, user-facing bullets from the actual diff. Do not invent items. **No em dashes anywhere in the notes or Docs copy** (the user's standing preference); use colons, commas, or periods.
 
 ```markdown
 ## What's new
 
-- **Feature** — short description
+- **Feature**: short description
 …
 
 Sparkle auto-update from X.Y.Z should offer this build.
 ```
 
+### Docs impact scan (always run, before drafting Docs copy)
+
+Go commit by commit (`git log <tag>..HEAD`, then `git show <sha> -- Storefront` for anything user-facing) and check each one against `/docs.md`. Look specifically for:
+
+| Change in the diff | Where the source of truth lives | What to check in Docs |
+|---|---|---|
+| New, changed, or removed shortcuts | `shortcutKey:` in `Storefront/Core/Models/Section.swift`, hotkey defaults in `AppSettings.swift`, key handling in `Features/Panel/PanelView.swift` | Keyboard shortcuts section lists **every** key, plus when it works (focus, search field, enabled sections) |
+| Settings options added, removed, or renamed | enums in `Storefront/Core/Models/AppSettings.swift`, `Features/Settings/*TabView.swift` | Settings bullets name the exact current options; removed options are gone |
+| Card links or sections added or renamed | `StaticLinkCatalog` / `SectionID` in `Section.swift` | Section names and link titles in prose match the app |
+| Theme or layout redesigns | `Features/Panel/*`, `Theme.swift` | Descriptive wording (for example the Theme bullet) and screenshots that now look wrong |
+| CSV columns or preset behavior | `SettingsCSVSupport.swift` | CSV sections and sample files |
+
+Then present the findings to the user as a short table (commit, Docs impact, proposed edit or "none") and **ask which suggested Docs updates they want**, alongside the release notes. Be concrete: enumerate every key, option, or link name from the source of truth instead of a generic "for example" bullet. (v0.0.17 lesson: a generic "letter key shown on a card link" bullet had to be replaced with the full `P`/`C`/`T`/... list after release.)
+
+Also flag, but do not replace, screenshots a UI change has made misleading (panel redesigns, icon swaps, widened panel).
+
 ### Docs copy
 
-Compare the release diff / notes against current Docs (`/docs.md` and the live `/docs` prose). Propose **user-facing Docs updates** that this release requires:
+Turn the approved scan findings into **user-facing Docs updates** this release requires:
 
 - New or changed Settings behavior, shortcuts, CSV columns, section presets, etc.
 - Wording that would be wrong or incomplete after this ship
@@ -96,7 +112,7 @@ Present to the user:
 
 1. Set `CFBundleShortVersionString` / `CFBundleVersion` in **both** `Info.plist` and `project.yml`.
 2. Run `xcodegen generate`.
-3. Commit message style: `Ship Storefront vX.Y.Z.` with one short body sentence on why (include the bump). Prefer committing the version bump together with any last polish already in the working tree that belongs in this release; do not commit unrelated dirty files.
+3. Commit message style: `Ship Storefront vX.Y.Z.` with one short body sentence on why (include the bump). Prefer committing the version bump together with any last polish already in the working tree that belongs in this release; do not commit unrelated dirty files. `Storefront.xcodeproj/` is gitignored, so only `Info.plist` and `project.yml` change.
 
 ## Step 4 — Build, notarize, appcast, dSYM
 
@@ -146,16 +162,30 @@ Apply the **approved** Docs updates to the Docs page document (`b947dba6-bbda-46
 
 1. **Prose module** (`modules[_type == "prose"].content`) — this is what `/docs` renders. Patch Portable Text so the live page matches the approved copy.
 2. **`markdown.code`** — this is what `/docs.md` (and `/llms.txt`) serve. Regenerate it from the updated modules so it stays in lockstep with the page (same conversion rules as `web/.agents/skills/generate-markdown/SKILL.md`: verbatim PT → Markdown, resolve image CDN URLs from `asset._ref`, keep existing frontmatter).
-3. Mutate published documents via the Sanity HTTP API with the CLI token (same auth as the version script). Prefer `createOrReplace` on the full document after editing, or targeted `patch` sets — do not leave approved copy sitting only in a draft.
+3. Mutate published documents via the Sanity HTTP API with the CLI token (same auth as the version script). Prefer one keyed `patch` per change set: `set` on `...content[_key=="…"].children[_key=="…"].text` for wording, `insert` `after` a block key for new blocks, `unset` a block key to remove one, and `set` `markdown.code` in the same mutation. This worked cleanly in v0.0.17 and avoids rewriting the whole document. Do not leave approved copy sitting only in a draft.
 4. If Step 2 said **No Docs copy changes**, skip 6b entirely (version script alone is enough).
 
 See [reference.md](reference.md) for fetch/mutate snippets.
 
 ### Verify
 
-- Version script reports no remaining old versions
+- Version script reports no remaining old versions (trust its output; the callout's `Latest: vX.Y.Z` is split across Portable Text spans, so a raw JSON grep for the full string finds nothing)
 - If Docs copy changed: refetch the Docs document and confirm both prose and `markdown.code` reflect the approved text
-- Live: `storefront.nuotsu.dev` footer / docs show `vNEW`, and updated sections appear on `/docs` and `/docs.md` (CDN/ISR may lag ~30s; recheck once)
+- Live: `storefront.nuotsu.dev` footer / docs show `vNEW`, and updated sections appear on `/docs` and `/docs.md`. Poll with a loop (about every 15s for 2 to 3 minutes) rather than one long `sleep`; the harness blocks standalone sleeps.
+
+### 6c — Redeploy when /docs is stale (expected every release)
+
+Every release since v0.0.11 has hit this: `/` and `/docs.md` pick up the new version, but `/docs` keeps serving the old footer `<code>vOLD</code>` from Vercel's edge cache (`x-vercel-cache: HIT`, rising `age`). The footer is its own `navigation` document, and changing it does not revalidate `/docs`. Edits to the Docs page document itself do show up on `/docs` right away.
+
+If `/docs` still contains `vOLD` after about 2 minutes of polling, push an empty commit to force a production redeploy, then poll again (it cleared about 2 minutes after the push in v0.0.17):
+
+```bash
+git commit --allow-empty -m "Refresh production cache after vX.Y.Z Sanity update." \
+  -m "Vercel's edge cache was still serving the vOLD footer on /docs after the Sanity mutation."
+git push
+```
+
+The real fix (on-demand revalidation of `/docs` when the footer document changes) lives in `web/` and is out of scope for a release run; mention it if the user asks.
 
 ## Local app rules
 
