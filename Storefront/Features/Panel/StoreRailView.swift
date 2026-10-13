@@ -21,7 +21,7 @@ struct StoreRailView: View {
 
             HStack(spacing: 6) {
                 // Count only — `visibleStores` would also sort, which nothing here needs.
-                Text("\(appState.stores.lazy.filter(\.isVisible).count) Stores")
+                Text("\(appState.stores.lazy.filter(\.isVisible).count) stores")
                     .font(.panel(11, shopify: chrome.isShopify))
                     .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta36)
                 Spacer(minLength: 4)
@@ -309,7 +309,7 @@ private struct StoreRowView: View, Equatable {
                     .font(.panel(12.5, shopify: isShopify))
                     .foregroundStyle(
                         isShopify
-                            ? Theme.Shopify.Sidebar.textPrimary
+                            ? (isSelected ? Theme.Shopify.Sidebar.textPrimary : Theme.Shopify.Sidebar.textItem)
                             : (isSelected ? Theme.textPrimary : Theme.textBody)
                     )
                     .lineLimit(1)

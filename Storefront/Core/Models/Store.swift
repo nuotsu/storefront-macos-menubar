@@ -43,6 +43,11 @@ struct Store: Identifiable, Codable, Equatable {
         return luma > 150 ? .black : .white
     }
 
+    var isWhiteAccent: Bool {
+        let (r, g, b) = HexColor.components(colorHex)
+        return r == 255 && g == 255 && b == 255
+    }
+
     var initials: String {
         let words = displayName.split(separator: " ")
         let letters = words.prefix(2).compactMap { $0.first }

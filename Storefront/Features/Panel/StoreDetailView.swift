@@ -146,6 +146,7 @@ struct StoreDetailView: View {
                         background: store.color,
                         foreground: store.accentTextColor,
                         isPrimary: true,
+                        usesWhiteFill: store.isWhiteAccent,
                         shortcutLabel: appState.settings.openAdminHotkey.mnemonicLetter.map { String($0) }
                     ) {
                         openStoreLink(adminURL)
@@ -402,6 +403,9 @@ private struct HeaderActionButton: View {
     let foreground: Color
     /// Shopify chrome only: primary keeps the store accent; secondary is Polaris white.
     var isPrimary: Bool = false
+    /// Shopify chrome only: a primary drawn with the secondary white fill (keeps its
+    /// drop shadow) — for white store accents, where the accent fill would vanish.
+    var usesWhiteFill: Bool = false
     /// Single-key panel shortcut shown as a trailing keycap label.
     var shortcutLabel: String? = nil
     let action: () -> Void
@@ -420,7 +424,7 @@ private struct HeaderActionButton: View {
     }
 
     private var labelColor: Color {
-        isShopify && !isPrimary ? Theme.Shopify.textPrimary : foreground
+        isShopify && (!isPrimary || usesWhiteFill) ? Theme.Shopify.textPrimary : foreground
     }
 
     /// macOS: lighter at the top.
@@ -462,7 +466,10 @@ private struct HeaderActionButton: View {
     @ViewBuilder
     private var buttonChrome: some View {
         if isShopify {
-            if isPrimary {
+            if isPrimary && usesWhiteFill {
+                PolarisSecondaryButtonChrome()
+                    .background { PolarisPrimaryButtonChrome.dropShadowLayers(base: .white) }
+            } else if isPrimary {
                 PolarisPrimaryButtonChrome(base: background)
             } else {
                 PolarisSecondaryButtonChrome()
@@ -503,15 +510,21 @@ private struct PolarisPrimaryButtonChrome: View {
         (3, -1.5, 2),
     ]
 
-    var body: some View {
+    static func dropShadowLayers(base: Color) -> some View {
         ZStack {
-            ForEach(Self.dropShadows.indices, id: \.self) { i in
-                let layer = Self.dropShadows[i]
+            ForEach(dropShadows.indices, id: \.self) { i in
+                let layer = dropShadows[i]
                 Capsule()
                     .inset(by: -layer.spread)
                     .fill(base)
-                    .shadow(color: .black.opacity(Self.dropShadowOpacity), radius: layer.blur / 2, y: layer.y)
+                    .shadow(color: .black.opacity(dropShadowOpacity), radius: layer.blur / 2, y: layer.y)
             }
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Self.dropShadowLayers(base: base)
 
             Capsule().fill(base)
 
@@ -624,7 +637,7 @@ struct SectionCardView: View {
                 Text(chrome.isShopify ? section.title : section.title.uppercased())
                     .font(
                         chrome.isShopify
-                            ? .inter(12, weight: .semibold)
+                            ? .inter(12, weight: .medium)
                             : .mono(9.5, weight: .semibold)
                     )
                     .tracking(chrome.isShopify ? 0 : 1.2)

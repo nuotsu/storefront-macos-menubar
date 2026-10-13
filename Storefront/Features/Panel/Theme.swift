@@ -93,6 +93,8 @@ enum Theme {
         enum Sidebar {
             static let fill = Color(hex: "1a1a1a")
             static let textPrimary = Color.white
+            /// Non-selected nav item label (admin settings nav `#dcdcdc`).
+            static let textItem = Color(hex: "dcdcdc")
             static let textSecondary = Color.white.opacity(0.72)
             static let textMeta = Color.white.opacity(0.55)
             static let searchFill = Color.white.opacity(0.08)
