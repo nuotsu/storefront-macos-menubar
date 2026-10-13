@@ -145,6 +145,7 @@ struct StoreDetailView: View {
                         iconName: "HomeIcon",
                         background: store.color,
                         foreground: store.accentTextColor,
+                        isPrimary: true,
                         shortcutLabel: appState.settings.openAdminHotkey.mnemonicLetter.map { String($0) }
                     ) {
                         openStoreLink(adminURL)
@@ -284,7 +285,7 @@ private struct CopyableHandleView: View {
                     .font(handleFont)
                     .foregroundStyle(handleColor)
                     .overlay(alignment: .bottom) {
-                        TightDashUnderline(color: handleColor)
+                        DottedUnderline()
                             .opacity(hoveringHandle || hoveringSuffix ? 1 : 0)
                     }
                     .contentShape(Rectangle())
@@ -296,7 +297,7 @@ private struct CopyableHandleView: View {
                     .font(handleFont)
                     .foregroundStyle(suffixColor)
                     .overlay(alignment: .bottom) {
-                        TightDashUnderline(color: suffixColor)
+                        DottedUnderline()
                             .opacity(hoveringSuffix ? 1 : 0)
                     }
                     .contentShape(Rectangle())
@@ -342,20 +343,21 @@ private struct CopyableHandleView: View {
     }
 }
 
-/// Compact dashed underline — tighter than system `.dash` spacing.
-private struct TightDashUnderline: View {
-    let color: Color
+/// Shopify admin metric-definition underline: `border-bottom: 2px dotted #c0c0c0`
+/// (round 2px dots, 2px apart).
+private struct DottedUnderline: View {
+    static let color = Color(hex: "c0c0c0")
 
     var body: some View {
         GeometryReader { geo in
             Path { path in
-                path.move(to: CGPoint(x: 0, y: 0.5))
-                path.addLine(to: CGPoint(x: geo.size.width, y: 0.5))
+                path.move(to: CGPoint(x: 1, y: 1))
+                path.addLine(to: CGPoint(x: geo.size.width, y: 1))
             }
-            .stroke(color, style: StrokeStyle(lineWidth: 1, dash: [2.5, 1.5]))
+            .stroke(Self.color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [0, 4]))
         }
-        .frame(height: 1)
-        .offset(y: 1)
+        .frame(height: 2)
+        .offset(y: 2)
         .allowsHitTesting(false)
     }
 }
@@ -398,6 +400,8 @@ private struct HeaderActionButton: View {
     let iconName: String
     let background: Color
     let foreground: Color
+    /// Shopify chrome only: primary keeps the store accent; secondary is Polaris white.
+    var isPrimary: Bool = false
     /// Single-key panel shortcut shown as a trailing keycap label.
     var shortcutLabel: String? = nil
     let action: () -> Void
@@ -408,22 +412,20 @@ private struct HeaderActionButton: View {
     }
 
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: isShopify ? 8 : 6, style: isShopify ? .circular : .continuous)
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
     }
 
-    /// macOS: lighter at the top. Shopify/Polaris: inverted — darker top, lighter bottom.
+    private var hitShape: AnyShape {
+        isShopify ? AnyShape(Capsule()) : AnyShape(shape)
+    }
+
+    private var labelColor: Color {
+        isShopify && !isPrimary ? Theme.Shopify.textPrimary : foreground
+    }
+
+    /// macOS: lighter at the top.
     private var fill: LinearGradient {
-        if isShopify {
-            return LinearGradient(
-                colors: [
-                    Color.black.composited(over: background, alpha: 0.06),
-                    Color.white.composited(over: background, alpha: 0.05),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
-        return LinearGradient(
+        LinearGradient(
             colors: [
                 Color.white.composited(over: background, alpha: 0.12),
                 background,
@@ -441,36 +443,165 @@ private struct HeaderActionButton: View {
                 .scaledToFit()
                 .frame(width: 13, height: 13)
             Text(title)
-                .font(.panel(11, weight: .medium, shopify: isShopify))
+                .font(.panel(isShopify ? 12 : 11, weight: .medium, shopify: isShopify))
+                .tracking(isShopify ? -0.12 : 0)
             if let shortcutLabel {
                 ShortcutKeyLabel(shortcutLabel)
                     .padding(.leading, 1)
             }
         }
-        .foregroundStyle(foreground)
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
+        .foregroundStyle(labelColor)
+        .padding(.horizontal, isShopify ? 12 : 9)
+        .padding(.vertical, isShopify ? 6 : 5)
+        .frame(minHeight: isShopify ? 28 : nil)
         .background { buttonChrome }
-        .contentShape(shape)
+        .contentShape(hitShape)
         .onTapGesture(perform: action)
     }
 
     @ViewBuilder
     private var buttonChrome: some View {
         if isShopify {
-            // Polaris primary-style: inverted fill + outer border + soft lift shadow.
-            shape
-                .fill(fill)
-                .overlay {
-                    shape.strokeBorder(Color.black.opacity(0.16), lineWidth: 0.5)
-                }
-                .shadow(color: .black.opacity(0.08), radius: 1, y: 0.5)
+            if isPrimary {
+                PolarisPrimaryButtonChrome(base: background)
+            } else {
+                PolarisSecondaryButtonChrome()
+            }
         } else {
             shape
                 .fill(fill)
                 .shadow(color: .black.opacity(0.14), radius: 1, y: 0.5)
                 .overlay(shape.strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5))
         }
+    }
+}
+
+/// Shopify admin `s-button variant="primary"` chrome, with `base` standing in for its
+/// `#101010` fill:
+/// ```
+/// background:
+///   radial-gradient(50% 50% at 50% 0%, rgba(255,255,255,.2) 0%, transparent 100%),
+///   radial-gradient(49.59% 37.11% at 50.41% 101.56%, rgba(255,255,255,.15) 0%, transparent 66.46%),
+///   <base>;
+/// box-shadow:
+///   rgba(0,0,0,.13) 0 1px .5px -.5px, rgba(0,0,0,.13) 0 1px 2px -.5px,
+///   rgba(0,0,0,.13) 0 4px 6px -2px, rgba(0,0,0,.13) 0 2px 3px -1.5px,
+///   inset 0 0 4px 1px <base>, inset 0 0 4px 2px rgba(255,255,255,.1),
+///   inset 0 0 12px -6px rgba(255,255,255,.75);
+/// ```
+/// SwiftUI `radius` ≈ CSS blur / 2; negative spread is an inset of the casting shape.
+/// Drop shadows are softened from admin's `.13` to `dropShadowOpacity`.
+private struct PolarisPrimaryButtonChrome: View {
+    let base: Color
+
+    private static let dropShadowOpacity = 0.07
+
+    private static let dropShadows: [(blur: CGFloat, spread: CGFloat, y: CGFloat)] = [
+        (0.5, -0.5, 1),
+        (2, -0.5, 1),
+        (6, -2, 4),
+        (3, -1.5, 2),
+    ]
+
+    var body: some View {
+        ZStack {
+            ForEach(Self.dropShadows.indices, id: \.self) { i in
+                let layer = Self.dropShadows[i]
+                Capsule()
+                    .inset(by: -layer.spread)
+                    .fill(base)
+                    .shadow(color: .black.opacity(Self.dropShadowOpacity), radius: layer.blur / 2, y: layer.y)
+            }
+
+            Capsule().fill(base)
+
+            GeometryReader { geo in
+                let w = geo.size.width
+                let h = geo.size.height
+                ZStack(alignment: .topLeading) {
+                    EllipticalGradient(
+                        colors: [.white.opacity(0.2), .white.opacity(0)],
+                        center: .top,
+                        startRadiusFraction: 0,
+                        endRadiusFraction: 0.5
+                    )
+                    EllipticalGradient(
+                        stops: [
+                            .init(color: .white.opacity(0.15), location: 0),
+                            .init(color: .white.opacity(0), location: 0.6646),
+                        ],
+                        center: .center,
+                        startRadiusFraction: 0,
+                        endRadiusFraction: 0.5
+                    )
+                    .frame(width: w * 0.9918, height: h * 0.7422)
+                    .position(x: w * 0.5041, y: h * 1.0156)
+                }
+            }
+            .clipShape(Capsule())
+
+            InsetCapsuleShadow(color: base, blur: 4, spread: 1)
+            InsetCapsuleShadow(color: .white.opacity(0.1), blur: 4, spread: 2)
+            InsetCapsuleShadow(color: .white.opacity(0.75), blur: 12, spread: -6)
+        }
+    }
+}
+
+/// Shopify admin `s-button variant="secondary"` chrome:
+/// ```
+/// .fill { background: #fff; border-radius: 8px }
+/// .decoration { box-shadow: #b5b5b5 0 -1px 0 0 inset, rgba(0,0,0,.1) 0 0 0 1px inset }
+/// ```
+/// Capsule (not 8px) to match the primary pill; bottom edge lightened from `#b5b5b5`.
+private struct PolarisSecondaryButtonChrome: View {
+    private let shape = Capsule()
+
+    var body: some View {
+        shape
+            .fill(Color.white)
+            .overlay {
+                shape.strokeBorder(Color.black.opacity(0.1), lineWidth: 1)
+            }
+            .overlay {
+                shape
+                    .fill(Color(hex: "c4c4c4"))
+                    .mask {
+                        shape
+                            .overlay {
+                                shape
+                                    .offset(y: -1)
+                                    .blendMode(.destinationOut)
+                            }
+                            .compositingGroup()
+                    }
+            }
+            .allowsHitTesting(false)
+    }
+}
+
+/// CSS `box-shadow: inset 0 0 <blur> <spread> <color>` on a capsule.
+private struct InsetCapsuleShadow: View {
+    let color: Color
+    let blur: CGFloat
+    let spread: CGFloat
+
+    var body: some View {
+        Rectangle()
+            .fill(color)
+            .padding(-(blur + abs(spread) + 2))
+            .mask {
+                Rectangle()
+                    .padding(-(blur + abs(spread) + 2))
+                    .overlay {
+                        Capsule()
+                            .inset(by: spread)
+                            .blendMode(.destinationOut)
+                    }
+                    .compositingGroup()
+            }
+            .blur(radius: blur / 2)
+            .mask(Capsule())
+            .allowsHitTesting(false)
     }
 }
 
