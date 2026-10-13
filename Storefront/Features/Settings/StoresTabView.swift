@@ -75,8 +75,11 @@ struct StoresTabView: View {
                     HStack(spacing: 14) {
                         Button(action: beginAdding) {
                             HStack(spacing: Column.spacing) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 12, weight: .semibold))
+                                Image("PlusIcon")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 14, height: 14)
                                     .frame(width: Column.order, alignment: .leading)
                                 Text("Add Store")
                                     .font(.system(size: 12.5))
@@ -213,8 +216,11 @@ struct StoresTabView: View {
                 Button {
                     appState.toggleFavorite(store)
                 } label: {
-                    Image(systemName: store.isFavorite ? "star.fill" : "star")
-                        .font(.system(size: 12))
+                    Image(store.isFavorite ? "StarFilledIcon" : "StarIcon")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 13, height: 13)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(store.isFavorite ? Theme.textPrimary : Theme.textMeta40)

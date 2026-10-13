@@ -103,9 +103,12 @@ struct StoreRailView: View {
 
     private var searchField: some View {
         HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.panel(10, shopify: chrome.isShopify))
-                .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta30)
+            Image("SearchIcon")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 12, height: 12)
+                .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.searchText : Theme.textMeta30)
                 .allowsHitTesting(false)
             // Custom placeholder: AppKit's cell placeholder jumps when the field editor
             // attaches on focus; a SwiftUI label stays put.
@@ -113,7 +116,7 @@ struct StoreRailView: View {
                 if appState.query.isEmpty {
                     Text("Search stores")
                         .font(.panel(11.5, shopify: chrome.isShopify))
-                        .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta30)
+                        .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.searchText : Theme.textMeta30)
                         .allowsHitTesting(false)
                 }
             TextField("", text: Binding(
@@ -125,24 +128,30 @@ struct StoreRailView: View {
                     .lineLimit(1)
                     .focused($searchFocused)
                     .focusEffectDisabled()
-                    .background(TextFieldAppKitTuning())
+                    .background(TextFieldAppKitTuning(caretColor: chrome.isShopify ? .white : nil))
                     .onSubmit { }
             }
             KeyComboView(
                 combo: appState.settings.focusSearchHotkey,
                 font: .panel(8, shopify: chrome.isShopify)
             )
-                .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta25)
+                .foregroundStyle(chrome.isShopify ? Theme.Shopify.Sidebar.searchText : Theme.textMeta25)
+                .padding(.horizontal, 3)
+                .padding(.vertical, 1)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .strokeBorder(chrome.isShopify ? Theme.Shopify.Sidebar.hairline : Theme.hairline, lineWidth: 0.5)
+                }
                 .allowsHitTesting(false)
         }
         .padding(.horizontal, 8)
         .frame(height: 26)
-        .background(chrome.isShopify ? Theme.Shopify.Sidebar.searchFill : Theme.searchFill)
-        .clipShape(RoundedRectangle(cornerRadius: chrome.isShopify ? 8 : 6, style: chrome.cornerStyle))
-        .overlay {
+        .background {
             if chrome.isShopify {
-                RoundedRectangle(cornerRadius: 8, style: .circular)
-                    .strokeBorder(Theme.Shopify.Sidebar.searchBorder, lineWidth: 1)
+                ShopifySidebarRaisedSurface(fill: Theme.Shopify.Sidebar.searchFill, cornerRadius: 9)
+            } else {
+                RoundedRectangle(cornerRadius: 6, style: chrome.cornerStyle)
+                    .fill(Theme.searchFill)
             }
         }
         .contentShape(Rectangle())
@@ -170,7 +179,7 @@ struct StoreRailView: View {
                 .padding(.top, 6)
             }
 
-            LegendLinkRow(systemImage: "gearshape", label: "Settings", help: "Settings", shortcutKey: ",") {
+            LegendLinkRow(iconName: "SettingsIcon", label: "Settings", help: "Settings", shortcutKey: ",") {
                 appState.selectedSettingsTab = .general
                 NotificationCenter.default.post(name: .openSettingsRequested, object: nil)
             }
@@ -190,7 +199,7 @@ struct StoreRailView: View {
 /// Compact rail footer link — same hover fill language as store rows, but smaller so it
 /// stays visually secondary to the sidebar list above.
 private struct LegendLinkRow: View {
-    let systemImage: String
+    let iconName: String
     let label: String
     let help: String
     var shortcutKey: String? = nil
@@ -219,10 +228,12 @@ private struct LegendLinkRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: systemImage)
-                    .font(.panel(9.5, weight: .medium, shopify: isShopify))
+                Image(iconName)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 11, height: 11)
                     .foregroundStyle(iconColor)
-                    .frame(width: 10, alignment: .center)
                 Text(label)
                     .font(.panel(10.5, shopify: isShopify))
                     .foregroundStyle(contentColor)
@@ -340,14 +351,19 @@ private struct StoreRowView: View, Equatable {
         // Clip only the backdrop so favorite tooltips aren't cut off.
         .background {
             ZStack(alignment: .leading) {
-                rowBackground
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(store.color)
-                    .frame(width: 3)
-                    .padding(.leading, 5)
-                    .padding(.vertical, 5)
+                if isShopify && isSelected {
+                    ShopifySidebarRaisedSurface(fill: Theme.Shopify.Sidebar.selectedFill, cornerRadius: 7)
+                }
+                ZStack(alignment: .leading) {
+                    rowBackground
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(store.color)
+                        .frame(width: 3)
+                        .padding(.leading, 5)
+                        .padding(.vertical, 5)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: isShopify ? .circular : .continuous))
             }
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: isShopify ? .circular : .continuous))
         }
         .contentShape(RoundedRectangle(cornerRadius: 7, style: isShopify ? .circular : .continuous))
         .background(
@@ -399,7 +415,7 @@ private struct StoreRowView: View, Equatable {
 
     private var rowBackground: Color {
         if isShopify {
-            if isSelected { return Theme.Shopify.Sidebar.selectedFill }
+            if isSelected { return .clear }
             if effectiveHovering { return Theme.Shopify.Sidebar.hoverFill }
             return .clear
         }
@@ -419,8 +435,11 @@ private struct FavoriteButton: View {
     let action: () -> Void
 
     var body: some View {
-        Image(systemName: isFavorite ? "star.fill" : "star")
-            .font(.panel(10, shopify: isShopify))
+        Image(isFavorite ? "StarFilledIcon" : "StarIcon")
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 11, height: 11)
             .foregroundStyle(
                 isShopify
                     ? (isFavorite ? Theme.Shopify.Sidebar.textPrimary : Theme.Shopify.Sidebar.textMeta)

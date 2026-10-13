@@ -2,10 +2,12 @@ import SwiftUI
 import AppKit
 
 /// Walks to the nearby `NSTextField` under a SwiftUI `TextField` and applies AppKit
-/// tuning that SwiftUI does not expose: no focus ring (avoids focus layout shift).
-/// Caret color is deliberately not handled here — use `CaretTintedTextField` when the
-/// caret must match a custom accent.
+/// tuning that SwiftUI does not expose: no focus ring (avoids focus layout shift), and
+/// an optional caret color. The shared field editor resets `insertionPointColor` when
+/// editing begins, so the color is re-applied on every begin-editing notification.
 struct TextFieldAppKitTuning: NSViewRepresentable {
+    var caretColor: NSColor? = nil
+
     func makeNSView(context: Context) -> TunerView {
         let view = TunerView()
         view.isHidden = true
@@ -13,14 +15,27 @@ struct TextFieldAppKitTuning: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: TunerView, context: Context) {
+        nsView.caretColor = caretColor
         nsView.applyTuning()
+        // Focus changes re-render before the field editor attaches; catch it next pass.
+        if caretColor != nil {
+            DispatchQueue.main.async { [weak nsView] in nsView?.applyTuning() }
+        }
     }
 
     final class TunerView: NSView {
+        var caretColor: NSColor?
         /// `updateNSView` fires on every panel re-render, and resolving the field means
         /// walking up the superview chain and recursing through sibling subtrees. Hold
         /// on to the field we found instead of re-walking for it each time.
         private weak var tunedField: NSTextField?
+        private var beginEditingObserver: NSObjectProtocol?
+
+        deinit {
+            if let beginEditingObserver {
+                NotificationCenter.default.removeObserver(beginEditingObserver)
+            }
+        }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -37,7 +52,13 @@ struct TextFieldAppKitTuning: NSViewRepresentable {
             if let editor = field.currentEditor() as? NSTextView {
                 editor.textContainerInset = .zero
                 editor.textContainer?.lineFragmentPadding = 0
+                applyCaretColor(to: editor)
             }
+        }
+
+        private func applyCaretColor(to editor: NSTextView) {
+            guard let caretColor, editor.insertionPointColor != caretColor else { return }
+            editor.insertionPointColor = caretColor
         }
 
         private func resolvedField() -> NSTextField? {
@@ -46,7 +67,24 @@ struct TextFieldAppKitTuning: NSViewRepresentable {
             }
             let field = Self.nearestTextField(from: self)
             tunedField = field
+            observeBeginEditing(of: field)
             return field
+        }
+
+        private func observeBeginEditing(of field: NSTextField?) {
+            if let beginEditingObserver {
+                NotificationCenter.default.removeObserver(beginEditingObserver)
+                self.beginEditingObserver = nil
+            }
+            guard let field else { return }
+            beginEditingObserver = NotificationCenter.default.addObserver(
+                forName: NSControl.textDidBeginEditingNotification,
+                object: field,
+                queue: .main
+            ) { [weak self, weak field] _ in
+                guard let self, let editor = field?.currentEditor() as? NSTextView else { return }
+                self.applyCaretColor(to: editor)
+            }
         }
 
         private static func nearestTextField(from view: NSView) -> NSTextField? {

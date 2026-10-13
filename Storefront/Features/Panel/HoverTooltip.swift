@@ -150,6 +150,64 @@ struct HoverTooltipBubble: View {
     var isShopify: Bool = false
 
     var body: some View {
+        if isShopify {
+            shopifyBody
+        } else {
+            macOSBody
+        }
+    }
+
+    /// Admin tooltip popover: `#0a0a0a`, 10px radius,
+    /// `rgba(220,220,220,.18) 0 0 0 1px, rgba(0,0,0,.15) 0 1px 2px, rgba(0,0,0,.15) 0 3px 6px -5px,
+    /// rgba(0,0,0,.84) 0 8px 24px -8px`, one gray keycap per key.
+    private var shopifyBody: some View {
+        let shape = RoundedRectangle(cornerRadius: 10, style: .circular)
+        return HStack(spacing: 8) {
+            Text(text)
+                .font(.panel(11.5, shopify: true))
+                .foregroundStyle(Theme.Shopify.Sidebar.textItem)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let shortcut {
+                HStack(spacing: 3) {
+                    ForEach(shortcut.modifierSymbolNames, id: \.self) { name in
+                        shopifyKeycap { Image(systemName: name) }
+                    }
+                    switch shortcut.keyGlyph {
+                    case .symbol(let name):
+                        shopifyKeycap { Image(systemName: name) }
+                    case .text(let text):
+                        shopifyKeycap { Text(text) }
+                    }
+                }
+            }
+        }
+        .padding(.leading, 9)
+        .padding(.trailing, shortcut == nil ? 9 : 5)
+        .padding(.vertical, 5)
+        .background {
+            shape
+                .fill(Theme.Shopify.Sidebar.fill)
+                .overlay { shape.strokeBorder(Color(white: 220 / 255).opacity(0.18), lineWidth: 1) }
+                .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
+                .shadow(color: .black.opacity(0.84), radius: 8, y: 6)
+        }
+    }
+
+    private func shopifyKeycap<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .font(.panel(9, weight: .medium, shopify: true))
+            .foregroundStyle(Theme.Shopify.Sidebar.textItem)
+            .frame(minWidth: 16, minHeight: 16)
+            .padding(.horizontal, 1)
+            .background {
+                RoundedRectangle(cornerRadius: 4, style: .circular)
+                    .fill(Color.white.opacity(0.14))
+            }
+    }
+
+    private var macOSBody: some View {
         HStack(spacing: 7) {
             Text(text)
                 .font(.panel(11, shopify: isShopify))

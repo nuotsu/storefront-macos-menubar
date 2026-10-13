@@ -64,8 +64,8 @@ enum Theme {
 
     /// Shopify Admin / Polaris tokens (light only — matches admin Settings).
     enum Shopify {
-        /// Page / panel body (`bg-surface-secondary`).
-        static let pageBackground = Color(hex: "f1f1f1")
+        /// Page / panel body (white admin page surface behind cards).
+        static let pageBackground = Color.white
         /// Card / sidebar surface.
         static let surface = Color.white
         /// Default border (`border-secondary`).
@@ -74,42 +74,46 @@ enum Theme {
         static let hairline = Color(hex: "ebebeb")
         /// Nav / row hover + selected fill.
         static let hoverFill = Color(hex: "f1f1f1")
-        static let controlFill = Color(hex: "f1f1f1")
         /// Search field fill (white with border, not a gray wash).
         static let searchFill = Color.white
         static let searchBorder = Color(hex: "c9cccf")
         static let textPrimary = Color(hex: "303030")
+        /// Card headings and card link icons.
+        static let textStrong = Color(hex: "101010")
+        /// Card row search / "+" glyphs at rest.
+        static let iconSecondary = Color(hex: "4a4a4a")
+        /// Active (hovered / arrow-focused) card link row.
+        static let rowHighlightFill = Color(hex: "f7f7f7")
         static let textSecondary = Color(hex: "616161")
         static let textMeta = Color(hex: "8a8a8a")
         /// Copy-confirmation checkmark. Polaris `color-icon-success`.
         static let iconSuccess = Color(hex: "29845a")
         /// AppKit fill for the hosting view under SwiftUI.
-        static var pageBackgroundNSColor: NSColor { NSColor(hex: "f1f1f1") }
-
-        /// Soft 1px ring on section cards.
-        static let cardRing = Color(hex: "e2e2e2")
-
+        static var pageBackgroundNSColor: NSColor { .white }
         /// Dark admin nav column (new Shopify admin) — fixed, independent of appearance.
         enum Sidebar {
-            static let fill = Color(hex: "1a1a1a")
+            static let fill = Color(hex: "0a0a0a")
             static let textPrimary = Color.white
             /// Non-selected nav item label (admin settings nav `#dcdcdc`).
             static let textItem = Color(hex: "dcdcdc")
             static let textSecondary = Color.white.opacity(0.72)
             static let textMeta = Color.white.opacity(0.55)
-            static let searchFill = Color.white.opacity(0.08)
-            static let searchBorder = Color.white.opacity(0.14)
-            static let hoverFill = Color.white.opacity(0.08)
-            static let selectedFill = Color.white.opacity(0.14)
+            static let searchFill = Color.white.opacity(0.19)
+            /// Search icon, placeholder, and shortcut hint (admin search pill `#a6a6a6`).
+            static let searchText = Color(hex: "a6a6a6")
+            static let hoverFill = Color.white.opacity(0.06)
+            static let selectedFill = Color.white.opacity(0.11)
             static let hairline = Color.white.opacity(0.1)
         }
     }
 
     static let panelSize = CGSize(width: 640, height: 520)
     /// Full-height sidebar, flush with the panel’s top / leading / bottom edges.
-    static let railWidth: CGFloat = 186
-    /// Shopify detail sheet’s leading corners, revealing the dark sidebar behind them.
+    static let railWidth: CGFloat = 220
+    /// Shopify detail sheet’s corners, revealing the dark sidebar behind them.
     static let contentSheetCornerRadius: CGFloat = 12
+    /// Gap between the Shopify detail sheet and the panel’s top / trailing / bottom edges.
+    static let contentSheetInset: CGFloat = 4
     /// Floating / under-mouse panel chrome corner radius (matches `AppDelegate` window mask).
     static let floatingPanelCornerRadius: CGFloat = 14
 
@@ -148,9 +152,10 @@ extension Font {
         .system(size: size, weight: weight, design: .monospaced)
     }
 
-    /// Bundled Inter Variable face (Shopify theme). Weight via the `wght` axis.
+    /// Bundled Shopify Inter Variable face (Shopify theme). Weight via the `wght` axis.
+    /// Family name is versioned in the font's `name` table — update with the TTF.
     static func inter(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .custom("InterVariable", size: size).weight(weight)
+        .custom("Shopify Inter Beta 0.29", size: size).weight(weight)
     }
 
     /// Panel UI type — Inter under Shopify, system otherwise.
@@ -162,8 +167,7 @@ extension Font {
 extension View {
     /// Border + elevation for the floating store rail and section cards.
     ///
-    /// Shopify uses Polaris’s layered card shadow (approx.):
-    /// `rgba(0,0,0,0.03) 0 5px 5px -2.5px, … , rgba(0,0,0,0.06) 0 0 0 1px`.
+    /// Shopify has no stroke — the tight 2px shadow layer draws the edge.
     @ViewBuilder
     func floatingCardChrome(
         chrome: WidgetChrome,
@@ -173,12 +177,7 @@ extension View {
     ) -> some View {
         switch chrome {
         case .shopify:
-            self
-                .overlay {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .circular)
-                        .strokeBorder(Theme.Shopify.cardRing, lineWidth: 1)
-                }
-                .shopifyCardShadow()
+            self.shopifyCardShadow(cornerRadius: cornerRadius)
         case .macOSOpaque:
             self
                 .overlay {
@@ -191,14 +190,51 @@ extension View {
         }
     }
 
-    /// Soft stacked shadows matching Polaris card elevation (spread approximated away).
-    func shopifyCardShadow() -> some View {
-        self
-            .shadow(color: .black.opacity(0.014), radius: 1.75, y: 3)
-            .shadow(color: .black.opacity(0.01), radius: 1, y: 2)
-            .shadow(color: .black.opacity(0.01), radius: 0.6, y: 1.25)
-            .shadow(color: .black.opacity(0.014), radius: 0.3, y: 0.5)
-            .shadow(color: .black.opacity(0.018), radius: 0.15, y: 0.25)
+    /// New admin card elevation:
+    /// `rgba(0,0,0,.24) 0 0 2px, rgba(0,0,0,.02) 0 2px 12px, rgba(0,0,0,.02) 0 4px 16px, rgba(0,0,0,.02) 0 4px 48px`.
+    /// One shape per layer — chained `.shadow` modifiers would shadow each other.
+    /// SwiftUI `radius` ≈ CSS blur / 2.
+    func shopifyCardShadow(cornerRadius: CGFloat) -> some View {
+        let layers: [(opacity: Double, radius: CGFloat, y: CGFloat)] = [
+            (0.24, 1, 0),
+            (0.02, 6, 2),
+            (0.02, 8, 4),
+            (0.02, 24, 4),
+        ]
+        return background {
+            ZStack {
+                ForEach(layers.indices, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(Theme.Shopify.surface)
+                        .shadow(color: .black.opacity(layers[i].opacity), radius: layers[i].radius, y: layers[i].y)
+                }
+            }
+        }
+    }
+}
+
+/// Raised dark-nav surface (admin search pill / selected nav item):
+/// `rgba(255,255,255,.02) 0 0 0 1px inset, rgba(255,255,255,.06) 0 1px 1px inset,
+/// rgba(255,255,255,.06) 0 0 12px 1px inset, rgba(0,0,0,.1) 0 1px 2px, rgba(0,0,0,.1) 0 0 0 1px`.
+struct ShopifySidebarRaisedSurface: View {
+    let fill: Color
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .circular)
+        shape
+            .fill(
+                fill
+                    .shadow(.inner(color: .white.opacity(0.06), radius: 0.5, y: 1))
+                    .shadow(.inner(color: .white.opacity(0.06), radius: 6))
+            )
+            .overlay { shape.strokeBorder(Color.white.opacity(0.02), lineWidth: 1) }
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius + 1, style: .circular)
+                    .strokeBorder(Color.black.opacity(0.1), lineWidth: 1)
+                    .padding(-1)
+            }
+            .shadow(color: .black.opacity(0.1), radius: 1, y: 1)
     }
 }
 

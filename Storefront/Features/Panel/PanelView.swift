@@ -44,13 +44,8 @@ struct PanelView: View {
     private var panelChromeBackground: some View {
         switch widgetChrome {
         case .shopify:
-            // Dark strip bleeds past the rail so the sheet’s rounded leading corners
-            // reveal sidebar, while the popover beak (over the detail column) stays page gray.
-            ZStack(alignment: .leading) {
-                Theme.Shopify.pageBackground
-                Theme.Shopify.Sidebar.fill
-                    .frame(width: Theme.railWidth + Theme.contentSheetCornerRadius)
-            }
+            // Full sidebar fill so the inset sheet's margins and rounded corners reveal it.
+            Theme.Shopify.Sidebar.fill
         case .macOSOpaque:
             Theme.panelOpaqueFill
         case .macOSGlass:
@@ -396,20 +391,16 @@ struct PanelView: View {
     }
 }
 
-/// Shopify detail column as a light sheet with rounded leading corners over the dark sidebar.
+/// Shopify detail column as a light inset sheet with rounded corners over the dark sidebar.
 private struct ShopifyContentSheetModifier: ViewModifier {
     let enabled: Bool
 
     func body(content: Content) -> some View {
         if enabled {
-            let shape = UnevenRoundedRectangle(
-                topLeadingRadius: Theme.contentSheetCornerRadius,
-                bottomLeadingRadius: Theme.contentSheetCornerRadius,
-                style: .circular
-            )
             content
                 .background(Theme.Shopify.pageBackground)
-                .clipShape(shape)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.contentSheetCornerRadius, style: .circular))
+                .padding([.top, .trailing, .bottom], Theme.contentSheetInset)
         } else {
             content
         }

@@ -221,14 +221,15 @@ enum StaticLinkCatalog {
             ]
         case .themes:
             return [
-                LinkRow(id: "themes.library", title: "Theme library", path: "/themes", iconName: "ThemeTemplateIcon", shortcutKey: "t"),
+                LinkRow(id: "themes.library", title: "Theme library", path: "/themes", iconName: "FolderIcon", shortcutKey: "t"),
                 LinkRow(id: "themes.rollouts", title: "Rollouts", path: "/rollouts", iconName: "RocketIcon"),
                 LinkRow(id: "themes.preferences", title: "Online Store Preferences", path: "/online_store/preferences", iconName: "SettingsIcon"),
+                LinkRow(id: "themes.brand", title: "Brand", path: "/settings/general/branding", iconName: "ColorIcon"),
             ]
         case .navigationAndRedirects:
             return [
-                LinkRow(id: "navigation.all", title: "Menus", path: "/menus", iconName: "ListBulletedIcon", createAction: .init(path: "/menus/new", noun: "Menu"), shortcutKey: "n"),
-                LinkRow(id: "redirects.all", title: "Redirects", path: "/content/redirects", iconName: "DomainRedirectIcon", createAction: .init(path: "/content/redirects/new", noun: "Redirect"), supportsSearch: true, shortcutKey: "r"),
+                LinkRow(id: "navigation.all", title: "Menus", path: "/menus", iconName: "ContentIcon", createAction: .init(path: "/menus/new", noun: "Menu"), shortcutKey: "n"),
+                LinkRow(id: "redirects.all", title: "URL Redirects", path: "/content/redirects", iconName: "TransferIcon", createAction: .init(path: "/content/redirects/new", noun: "Redirect"), supportsSearch: true, shortcutKey: "r"),
             ]
         case .orders:
             return [
@@ -245,31 +246,32 @@ enum StaticLinkCatalog {
             return [
                 LinkRow(id: "settings.general", title: "General", path: "/settings/general", iconName: "SettingsIcon", shortcutKey: "g"),
                 LinkRow(id: "settings.payments", title: "Payments", path: "/settings/payments", iconName: "PaymentIcon"),
-                LinkRow(id: "settings.checkout", title: "Checkout", path: "/settings/checkout", iconName: "CreditCardIcon"),
+                LinkRow(id: "settings.checkout", title: "Checkout", path: "/settings/checkout", iconName: "CartOutlineIcon"),
                 LinkRow(id: "settings.shipping", title: "Shipping", path: "/settings/shipping", iconName: "DeliveryIcon"),
                 LinkRow(id: "settings.domains", title: "Domains", path: "/settings/domains", iconName: "DomainIcon"),
                 LinkRow(id: "settings.markets", title: "Markets", path: "/settings/markets", iconName: "MarketsIcon"),
                 LinkRow(id: "settings.notifications", title: "Notifications", path: "/settings/notifications", iconName: "NotificationIcon"),
+                LinkRow(id: "settings.customerEvents", title: "Customer events", path: "/settings/customer_events", iconName: "CursorIcon"),
             ]
         case .apps:
             return [
                 LinkRow(id: "apps.installed", title: "Installed apps", path: "/settings/apps", iconName: "AppsIcon"),
-                LinkRow(id: "apps.store", title: "App store", path: "", iconName: "StoreIcon", absoluteURL: "https://apps.shopify.com/", supportsSearch: true, absoluteSearchURL: "https://apps.shopify.com/search", searchQueryParamName: "q"),
+                LinkRow(id: "apps.store", title: "App store", path: "", iconName: "StoreOutlineIcon", absoluteURL: "https://apps.shopify.com/", supportsSearch: true, absoluteSearchURL: "https://apps.shopify.com/search", searchQueryParamName: "q"),
             ]
         case .analytics:
             return [
                 LinkRow(id: "analytics.dashboard", title: "Dashboards", path: "/analytics", iconName: "ChartVerticalIcon"),
-                LinkRow(id: "analytics.reports", title: "Reports", path: "/analytics/reports", iconName: "ChartLineIcon", supportsSearch: true),
-                LinkRow(id: "analytics.live", title: "Live view", path: "/analytics/live", iconName: "LiveIcon"),
+                LinkRow(id: "analytics.reports", title: "Reports", path: "/analytics/reports", iconName: "PageReportIcon", supportsSearch: true),
+                LinkRow(id: "analytics.live", title: "Live view", path: "/analytics/live", iconName: "GlobeIcon"),
                 LinkRow(id: "analytics.agentic", title: "Agentic", path: "/apps/agentic", iconName: "AgenticIcon"),
             ]
         case .content:
             return [
                 LinkRow(id: "content.pages", title: "Pages", path: "/pages", iconName: "PageIcon", createAction: .init(path: "/pages/new", noun: "Page"), supportsSearch: true, shortcutKey: "w"),
                 LinkRow(id: "content.blogs", title: "Blogs", path: "/content/blogs", iconName: "BlogIcon", createAction: .init(path: "/content/blogs/new", noun: "Blog"), supportsSearch: true, shortcutKey: "b"),
-                LinkRow(id: "content.blog", title: "Blog posts", path: "/content/articles", iconName: "BlogIcon", createAction: .init(path: "/content/articles/new", noun: "Blog post"), supportsSearch: true),
+                LinkRow(id: "content.blog", title: "Blog posts", path: "/content/articles", iconName: "EditIcon", createAction: .init(path: "/content/articles/new", noun: "Blog post"), supportsSearch: true),
                 LinkRow(id: "content.files", title: "Files", path: "/content/files", iconName: "FileIcon", supportsSearch: true, shortcutKey: "f"),
-                LinkRow(id: "content.metafields", title: "Metafields", path: "/settings/custom_data", iconName: "MetaobjectListIcon", shortcutKey: "m"),
+                LinkRow(id: "content.metafields", title: "Metafields", path: "/settings/custom_data", iconName: "MetafieldsIcon", shortcutKey: "m"),
             ]
         case .customers:
             return [

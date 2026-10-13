@@ -155,7 +155,7 @@ struct StoreDetailView: View {
                 if let shopURL = store.shopURL {
                     HeaderActionButton(
                         title: "Online Store",
-                        iconName: "StoreIcon",
+                        iconName: "StoreOutlineIcon",
                         background: store.color.pillBackground(colorScheme: colorScheme),
                         foreground: store.color.pillTextColor(colorScheme: colorScheme),
                         shortcutLabel: appState.settings.openOnlineStoreHotkey.mnemonicLetter.map { String($0) }
@@ -363,10 +363,10 @@ private struct DottedUnderline: View {
     }
 }
 
-/// Small keycap hint for a single-key panel shortcut. Fixed light colors in both
-/// appearances so it reads the same on store-colored buttons and card rows.
+/// Small keycap hint for a single-key panel shortcut, filled with the card row highlight color.
 struct ShortcutKeyLabel: View {
     let key: String
+    @Environment(AppState.self) private var appState
 
     init(_ key: String) {
         self.key = key
@@ -378,13 +378,17 @@ struct ShortcutKeyLabel: View {
             Text("W").hidden()
             Text(key.uppercased())
         }
-            .font(.system(size: 8))
+            .font(.system(size: 8, weight: .bold))
             .foregroundStyle(Color(hex: "7a7a7a"))
             .padding(.horizontal, 3)
             .padding(.vertical, 1)
             .background {
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color(hex: "ececec"))
+                    .fill(
+                        appState.settings.widgetThemePreference.isShopify
+                            ? Theme.Shopify.rowHighlightFill
+                            : Theme.controlFill
+                    )
                     .overlay {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
                             .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
@@ -410,6 +414,8 @@ private struct HeaderActionButton: View {
     var shortcutLabel: String? = nil
     let action: () -> Void
     @Environment(AppState.self) private var appState
+    @State private var isPressed = false
+    @State private var size: CGSize = .zero
 
     private var isShopify: Bool {
         appState.settings.widgetThemePreference.isShopify
@@ -417,6 +423,20 @@ private struct HeaderActionButton: View {
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: 6, style: .continuous)
+    }
+
+    /// Press-to-shrink with button semantics: fires on release only while still inside.
+    private var pressGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                isPressed = CGRect(origin: .zero, size: size).contains(value.location)
+            }
+            .onEnded { value in
+                isPressed = false
+                if CGRect(origin: .zero, size: size).contains(value.location) {
+                    action()
+                }
+            }
     }
 
     private var hitShape: AnyShape {
@@ -460,7 +480,11 @@ private struct HeaderActionButton: View {
         .frame(minHeight: isShopify ? 28 : nil)
         .background { buttonChrome }
         .contentShape(hitShape)
-        .onTapGesture(perform: action)
+        .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
+        .gesture(pressGesture)
+        .scaleEffect(isPressed ? 0.98 : 1)
+        .animation(.easeOut(duration: 0.1), value: isPressed)
+        .pointingHandCursor()
     }
 
     @ViewBuilder
@@ -641,7 +665,7 @@ struct SectionCardView: View {
                             : .mono(9.5, weight: .semibold)
                     )
                     .tracking(chrome.isShopify ? 0 : 1.2)
-                    .foregroundStyle(chrome.isShopify ? Theme.Shopify.textSecondary : Theme.textMeta40)
+                    .foregroundStyle(chrome.isShopify ? Theme.Shopify.textStrong : Theme.textMeta40)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 if isFocused {
@@ -693,7 +717,8 @@ struct SectionCardView: View {
                     SidebarGlassBackground(cornerRadius: 9)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: chrome.cornerStyle))
+            // Continuous ≈ Shopify's `corner-shape: superellipse(1.333)`.
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
         .floatingCardChrome(
             chrome: chrome,
@@ -761,7 +786,7 @@ private struct CardLinkRow: View {
                         .frame(width: 14, height: 14)
                         .foregroundStyle(
                             isShopify
-                                ? (isActive ? Theme.Shopify.textPrimary : Theme.Shopify.textMeta)
+                                ? Theme.Shopify.textStrong
                                 : (isActive ? Theme.textBody : Theme.textMeta40)
                         )
                     Text(row.title)
@@ -804,8 +829,11 @@ private struct CardLinkRow: View {
                                 focusedRowSearchID.wrappedValue = row.id
                             }
                         } label: {
-                            Image(systemName: "magnifyingglass")
-                                .font(.panel(10, weight: .medium, shopify: isShopify))
+                            Image("SearchIcon")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 12, height: 12)
                         }
                         .hoverTooltip(
                             "Toggle search",
@@ -819,8 +847,11 @@ private struct CardLinkRow: View {
                             guard let url = row.createURL(for: store.myshopifyDomain) else { return }
                             openStoreLink(url)
                         } label: {
-                            Image(systemName: "plus")
-                                .font(.panel(10, weight: .medium, shopify: isShopify))
+                            Image("PlusIcon")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 14, height: 14)
                         }
                         .hoverTooltip(
                             "Create new \(createAction.noun)",
@@ -891,7 +922,7 @@ private struct CardLinkRow: View {
             // highlights. Expanded search without active focus keeps no fill.
             if isActive {
                 RoundedRectangle(cornerRadius: 5, style: isShopify ? .circular : .continuous)
-                    .fill(isShopify ? Theme.Shopify.controlFill : Theme.controlFill)
+                    .fill(isShopify ? Theme.Shopify.rowHighlightFill : Theme.controlFill)
             }
         }
     }
@@ -949,13 +980,42 @@ private struct PillSegment<Label: View>: View {
         label()
             .foregroundStyle(
                 appState.settings.widgetThemePreference.isShopify
-                    ? (isHovering || isActive ? Theme.Shopify.textPrimary : Theme.Shopify.textMeta)
+                    ? (isHovering || isActive ? Theme.Shopify.textStrong : Theme.Shopify.iconSecondary)
                     : (isHovering || isActive ? Theme.textBody : Theme.textMeta40)
             )
             .frame(width: cardTrailingSlotWidth)
             .frame(maxHeight: .infinity)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
+        .pointingHandCursor()
         .onTapGesture(perform: action)
+    }
+}
+
+/// `pointerStyle(.link)` needs macOS 15; balance push/pop so a view torn down
+/// mid-hover never strands the hand cursor.
+private struct PointingHandCursorModifier: ViewModifier {
+    @State private var pushed = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { set($0) }
+            .onDisappear { set(false) }
+    }
+
+    private func set(_ on: Bool) {
+        guard on != pushed else { return }
+        if on {
+            NSCursor.pointingHand.push()
+        } else {
+            NSCursor.pop()
+        }
+        pushed = on
+    }
+}
+
+extension View {
+    func pointingHandCursor() -> some View {
+        modifier(PointingHandCursorModifier())
     }
 }
