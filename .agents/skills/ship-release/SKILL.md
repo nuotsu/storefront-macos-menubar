@@ -175,7 +175,7 @@ See [reference.md](reference.md) for fetch/mutate snippets.
 
 ### 6c — Redeploy when /docs is stale (expected every release)
 
-Every release since v0.0.11 has hit this: `/` and `/docs.md` pick up the new version, but `/docs` keeps serving the old footer `<code>vOLD</code>` from Vercel's edge cache (`x-vercel-cache: HIT`, rising `age`). The footer is its own `navigation` document, and changing it does not revalidate `/docs`. Edits to the Docs page document itself do show up on `/docs` right away.
+Every release since v0.0.11 has hit this: `/` and `/docs.md` pick up the new version, but `/docs` keeps serving the old footer `<code>vOLD</code>` from Vercel's edge cache (`x-vercel-cache: HIT`, rising `age`). The footer is its own `navigation` document, and changing it does not revalidate `/docs`. Docs page edits can stick too, especially right after a deploy (the post-deploy render gets cached at the edge), so always verify the new wording on `/docs`, not just `/docs.md`.
 
 If `/docs` still contains `vOLD` after about 2 minutes of polling, push an empty commit to force a production redeploy, then poll again (it cleared about 2 minutes after the push in v0.0.17):
 
