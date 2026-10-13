@@ -356,9 +356,45 @@ export type Prose = {
 		| ({
 				_key: string
 		  } & CustomHtml)
-		| ({
+		| {
+				headerRows?: number
+				rows?: Array<{
+					cells?: Array<{
+						value?: Array<{
+							children?: Array<{
+								marks?: Array<string>
+								text?: string
+								_type: 'span'
+								_key: string
+							}>
+							style?:
+								| 'normal'
+								| 'h1'
+								| 'h2'
+								| 'h3'
+								| 'h4'
+								| 'h5'
+								| 'h6'
+								| 'blockquote'
+							listItem?: 'bullet' | 'number'
+							markDefs?: Array<{
+								href?: string
+								_type: 'link'
+								_key: string
+							}>
+							level?: number
+							_type: 'block'
+							_key: string
+						}>
+						_type: 'cell'
+						_key: string
+					}>
+					_type: 'row'
+					_key: string
+				}>
+				_type: 'table'
 				_key: string
-		  } & Table)
+		  }
 	>
 	sidebar?: Sidebar
 }
@@ -834,38 +870,6 @@ export type AccordionList = {
 	exclusive?: boolean
 	enableSchema?: boolean
 	layout?: 'vertical' | 'horizontal'
-}
-
-export type Table = {
-	_type: 'table'
-	headerRows?: number
-	rows?: Array<{
-		cells?: Array<{
-			value?: Array<{
-				children?: Array<{
-					marks?: Array<string>
-					text?: string
-					_type: 'span'
-					_key: string
-				}>
-				style?:
-					'normal' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'blockquote'
-				listItem?: 'bullet' | 'number'
-				markDefs?: Array<{
-					href?: string
-					_type: 'link'
-					_key: string
-				}>
-				level?: number
-				_type: 'block'
-				_key: string
-			}>
-			_type: 'cell'
-			_key: string
-		}>
-		_type: 'row'
-		_key: string
-	}>
 }
 
 export type Sidebar = {
@@ -1824,7 +1828,6 @@ export type AllSanitySchemaTypes =
 	| BlogPostReference
 	| BlogIndex
 	| AccordionList
-	| Table
 	| Sidebar
 	| ModuleAttributes
 	| Metadata
@@ -2793,8 +2796,6 @@ export type PAGE_QUERY_RESULT = {
 							_key: string
 					  }
 					| {
-							_key: string
-							_type: 'table'
 							headerRows?: number
 							rows?: Array<{
 								cells?: Array<{
@@ -2830,6 +2831,8 @@ export type PAGE_QUERY_RESULT = {
 								_type: 'row'
 								_key: string
 							}>
+							_type: 'table'
+							_key: string
 					  }
 				> | null
 				sidebar: {
@@ -4432,8 +4435,6 @@ export type BLOG_POST_QUERY_RESULT = {
 							_key: string
 					  }
 					| {
-							_key: string
-							_type: 'table'
 							headerRows?: number
 							rows?: Array<{
 								cells?: Array<{
@@ -4469,6 +4470,8 @@ export type BLOG_POST_QUERY_RESULT = {
 								_type: 'row'
 								_key: string
 							}>
+							_type: 'table'
+							_key: string
 					  }
 				> | null
 				sidebar: {
@@ -5834,8 +5837,6 @@ export type NOT_FOUND_QUERY_RESULT = {
 							_key: string
 					  }
 					| {
-							_key: string
-							_type: 'table'
 							headerRows?: number
 							rows?: Array<{
 								cells?: Array<{
@@ -5871,6 +5872,8 @@ export type NOT_FOUND_QUERY_RESULT = {
 								_type: 'row'
 								_key: string
 							}>
+							_type: 'table'
+							_key: string
 					  }
 				> | null
 				sidebar: {

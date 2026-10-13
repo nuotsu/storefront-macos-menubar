@@ -1,5 +1,7 @@
 import { PortableText, type PortableTextTypeComponentProps } from 'next-sanity'
-import type { Table } from '@/sanity/types'
+import type { Prose } from '@/sanity/types'
+
+type Table = Extract<NonNullable<Prose['content']>[number], { _type: 'table' }>
 
 type Row = NonNullable<Table['rows']>[number]
 

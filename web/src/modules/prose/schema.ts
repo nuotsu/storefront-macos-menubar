@@ -1,6 +1,7 @@
 import { defineArrayMember, defineField } from 'sanity'
 import { BlockContentIcon } from '@sanity/icons/BlockContent'
 import { ImageIcon } from '@sanity/icons/Image'
+import { ThLargeIcon } from '@sanity/icons/ThLarge'
 import { VscListTree } from 'react-icons/vsc'
 import { getBlockText } from '@/lib/utils'
 import defineModule from '@/sanity/schemaTypes/fragments/define-module'
@@ -51,7 +52,45 @@ export default defineModule({
 					options: { withFilename: true },
 				}),
 				{ type: 'custom-html' },
-				{ type: 'table' },
+				// Shape the built-in PTE table editing binds to (sanity ships no `table` type).
+				// Names must stay table/rows/row/cells/cell/value; `headerRows` enables the header toggle.
+				defineArrayMember({
+					name: 'table',
+					type: 'object',
+					icon: ThLargeIcon,
+					fields: [
+						defineField({ name: 'headerRows', type: 'number' }),
+						defineField({
+							name: 'rows',
+							type: 'array',
+							of: [
+								defineArrayMember({
+									name: 'row',
+									type: 'object',
+									fields: [
+										defineField({
+											name: 'cells',
+											type: 'array',
+											of: [
+												defineArrayMember({
+													name: 'cell',
+													type: 'object',
+													fields: [
+														defineField({
+															name: 'value',
+															type: 'array',
+															of: [defineArrayMember({ type: 'block' })],
+														}),
+													],
+												}),
+											],
+										}),
+									],
+								}),
+							],
+						}),
+					],
+				}),
 			],
 			// Built-in PTE table editing (Studio ≥ 6.6) is off by default.
 			components: {
