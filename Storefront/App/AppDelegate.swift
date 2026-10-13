@@ -190,18 +190,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Template menu-bar glyph sized to match typical status-item SF Symbols.
     private static func menuBarStatusImage(for preference: MenuBarIconPreference) -> NSImage? {
-        if let symbolName = preference.systemSymbolName {
-            let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-            let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Storefront")?
-                .withSymbolConfiguration(config)
-            image?.isTemplate = true
-            return image
-        }
-
-        guard let assetName = preference.assetName,
-              let source = NSImage(named: assetName)?.copy() as? NSImage else { return nil }
-        // Polaris assets are authored at 20×20. Draw at exactly 20pt and keep only the
-        // preserved SVG rep so AppKit re-rasters at the display scale — the catalog's
+        guard let source = NSImage(named: preference.assetName)?.copy() as? NSImage else { return nil }
+        // Draw at `menuBarPointSize` and keep only the preserved SVG rep so AppKit re-rasters at the display scale — the catalog's
         // 20/40px bitmap stands-ins look soft when scaled or drawn off-pixel.
         let hasSVG = source.representations.contains {
             String(describing: type(of: $0)).contains("SVG")
@@ -212,7 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 source.removeRepresentation(rep)
             }
         }
-        source.size = NSSize(width: 20, height: 20)
+        source.size = NSSize(width: preference.menuBarPointSize, height: preference.menuBarPointSize)
         source.isTemplate = true
         source.accessibilityDescription = "Storefront"
         return source
@@ -800,7 +790,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var fillColor: NSColor?
         if shouldFill {
             if isShopify {
-                fillColor = Theme.Shopify.pageBackgroundNSColor
+                // Sidebar black behind the inset sheet, so the beak reads as part of it.
+                fillColor = Theme.Shopify.Sidebar.fillNSColor
             } else if let view = popover?.contentViewController?.view
                 ?? floatingPanelHosting?.view
             {
@@ -823,6 +814,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         applyPopoverBeakBackground(fillColor: fillColor)
+        applyShopifyBeakBackdrop(isShopify)
+    }
+
+    private static let shopifyBeakBackdropID = NSUserInterfaceItemIdentifier("ShopifyBeakBackdrop")
+
+    /// Shopify theme only: the frame view's layer color is still washed out by the popover
+    /// material drawn over it, so put an opaque sidebar-black view above that material,
+    /// behind the content. The frame's shape mask clips it to the body + beak.
+    private func applyShopifyBeakBackdrop(_ isShopify: Bool) {
+        guard let contentView = popover?.contentViewController?.view,
+              let frameView = contentView.superview else { return }
+        let existing = frameView.subviews.first { $0.identifier == Self.shopifyBeakBackdropID }
+
+        guard isShopify else {
+            existing?.removeFromSuperview()
+            return
+        }
+
+        let backdrop = existing ?? {
+            let view = NSView(frame: frameView.bounds)
+            view.identifier = Self.shopifyBeakBackdropID
+            view.autoresizingMask = [.width, .height]
+            view.wantsLayer = true
+            frameView.addSubview(view, positioned: .below, relativeTo: contentView)
+            return view
+        }()
+        backdrop.frame = frameView.bounds
+        backdrop.layer?.backgroundColor = Theme.Shopify.Sidebar.fillNSColor.cgColor
     }
 
     /// Colors the NSPopover window frame (the view that includes the arrow/beak).

@@ -88,7 +88,7 @@ enum SettingsSearchIndex {
         hit("appearance.appearance", "Appearance", "Appearance", .appearance, ["theme", "light", "dark", "system", "auto"]),
         hit("appearance.opaqueBackground", "Widget background", "Appearance", .appearance, ["opaque", "transparent", "glass", "vibrancy", "liquid glass", "widget"]),
         hit("appearance.appIcon", "App Icon", "Appearance", .appearance, ["icon", "dock", "light", "dark", "auto", "system"]),
-        hit("appearance.menuBarIcon", "Menu bar icon", "Appearance", .appearance, ["bag", "cart", "store", "status item", "menu bar", "outline", "filled"]),
+        hit("appearance.menuBarIcon", "Menu bar icon", "Appearance", .appearance, ["cart", "store", "shopify", "status item", "menu bar", "outline", "filled"]),
 
         // How to use
         hit("howto.addStores", "Add your stores", "How to use", .howToUse, ["add store", "myshopify", "import csv"]),

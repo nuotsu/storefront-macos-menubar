@@ -34,15 +34,16 @@ enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
         }
     }
 
-    var systemImage: String {
+    /// Bundled Polaris icon asset.
+    var iconName: String {
         switch self {
-        case .general: "gearshape"
-        case .appearance: "paintpalette"
-        case .stores: "bag"
-        case .sections: "square.grid.2x2"
-        case .keybindings: "keyboard"
-        case .howToUse: "questionmark.circle"
-        case .about: "info.circle"
+        case .general: "SettingsIcon"
+        case .appearance: "ColorIcon"
+        case .stores: "StoreOutlineIcon"
+        case .sections: "SectionsIcon"
+        case .keybindings: "KeyboardIcon"
+        case .howToUse: "QuestionCircleIcon"
+        case .about: "InfoIcon"
         }
     }
 }

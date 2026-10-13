@@ -10,7 +10,7 @@ enum SettingsWindowMetrics {
 }
 
 /// Native `NavigationSplitView` settings shell — system Liquid Glass sidebar,
-/// traffic lights, and sidebar toggle. Search lives in the sidebar header.
+/// and traffic lights, with no sidebar toggle. Search lives in the sidebar header.
 struct SettingsRootView: View {
     @Environment(AppState.self) private var appState
     @State private var columnVisibility = NavigationSplitViewVisibility.all
@@ -43,6 +43,7 @@ struct SettingsRootView: View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
                 .navigationSplitViewColumnWidth(min: 220, ideal: 220, max: 280)
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             // No outer ScrollView — Stores uses List, which collapses to zero height
             // when nested in an unbounded scroll container. Sections is ScrollView-based.
@@ -89,8 +90,12 @@ struct SettingsRootView: View {
                 searchList(searchHits)
             } else {
                 List(SettingsTab.allCases, selection: $appState.selectedSettingsTab) { tab in
-                    Label(tab.title, systemImage: tab.systemImage)
-                        .tag(tab)
+                    Label {
+                        Text(tab.title)
+                    } icon: {
+                        SettingsTabIcon(tab: tab, size: 16)
+                    }
+                    .tag(tab)
                 }
             }
         }
@@ -133,8 +138,11 @@ struct SettingsRootView: View {
 
     private var sidebarSearchField: some View {
         HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
+            Image("SearchIcon")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 13, height: 13)
                 .foregroundStyle(.secondary)
             TextField("Search", text: $searchText)
                 .textFieldStyle(.plain)
@@ -143,8 +151,11 @@ struct SettingsRootView: View {
                 Button {
                     searchText = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 12))
+                    Image("XIcon")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 12, height: 12)
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -181,6 +192,20 @@ struct SettingsRootView: View {
         case .about:
             AboutTabView()
         }
+    }
+}
+
+/// Pane icon from the bundled Polaris asset.
+struct SettingsTabIcon: View {
+    let tab: SettingsTab
+    let size: CGFloat
+
+    var body: some View {
+        Image(tab.iconName)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
     }
 }
 

@@ -178,7 +178,11 @@ struct HowToUseTabView: View {
                     Button {
                         appState.selectedSettingsTab = actionTab
                     } label: {
-                        Label(actionTitle, systemImage: actionTab.systemImage)
+                        Label {
+                            Text(actionTitle)
+                        } icon: {
+                            SettingsTabIcon(tab: actionTab, size: 13)
+                        }
                     }
                     .buttonStyle(.link)
                     .font(.system(size: 12.5))

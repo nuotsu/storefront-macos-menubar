@@ -35,7 +35,7 @@ enum SectionID: String, Codable, CaseIterable, Hashable {
         switch self {
         case .products: return "ProductIcon"
         case .collections: return "CollectionIcon"
-        case .themes: return "ThemeIcon"
+        case .themes: return "SectionsIcon"
         case .navigationAndRedirects: return "MenuIcon"
         case .orders: return "OrderIcon"
         case .discounts: return "DiscountIcon"
@@ -224,7 +224,7 @@ enum StaticLinkCatalog {
                 LinkRow(id: "themes.library", title: "Theme library", path: "/themes", iconName: "FolderIcon", shortcutKey: "t"),
                 LinkRow(id: "themes.rollouts", title: "Rollouts", path: "/rollouts", iconName: "RocketIcon"),
                 LinkRow(id: "themes.preferences", title: "Online Store Preferences", path: "/online_store/preferences", iconName: "SettingsIcon"),
-                LinkRow(id: "themes.brand", title: "Brand", path: "/settings/general/branding", iconName: "ColorIcon"),
+                LinkRow(id: "themes.brand", title: "Brand", path: "/settings/general/branding", iconName: "PaintBrushFlatIcon"),
             ]
         case .navigationAndRedirects:
             return [

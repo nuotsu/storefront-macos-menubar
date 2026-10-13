@@ -83,11 +83,9 @@ enum AppIconPreference: String, Codable, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// Menu bar status-item glyph — SF Symbol bag, Polaris Cart / Store × outline / filled,
+/// Menu bar status-item glyph — Polaris Cart / Store × outline / filled,
 /// or the single-form Shopify glyph.
 enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashable {
-    case bag
-    case bagFilled
     case cart
     case cartFilled
     case store
@@ -96,8 +94,17 @@ enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashabl
 
     var id: Self { self }
 
+    /// Bag was removed; saved `bag` / `bagFilled` fall back to the matching Store form.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        switch raw {
+        case "bag": self = .store
+        case "bagFilled": self = .storeFilled
+        default: self = MenuBarIconPreference(rawValue: raw) ?? .store
+        }
+    }
+
     enum Family: String, CaseIterable, Identifiable {
-        case bag
         case cart
         case store
         case shopify
@@ -106,20 +113,18 @@ enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashabl
 
         var title: String {
             switch self {
-            case .bag: "Bag"
             case .cart: "Cart"
             case .store: "Store"
             case .shopify: "Shopify"
             }
         }
 
-        /// Settings chip order: Bag → Store → Cart → Shopify.
-        static let displayOrder: [Family] = [.bag, .store, .cart, .shopify]
+        /// Settings chip order: Store → Cart → Shopify.
+        static let displayOrder: [Family] = [.store, .cart, .shopify]
     }
 
     var family: Family {
         switch self {
-        case .bag, .bagFilled: .bag
         case .cart, .cartFilled: .cart
         case .store, .storeFilled: .store
         case .shopify: .shopify
@@ -129,38 +134,36 @@ enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashabl
     /// Shopify has only one form — never "filled".
     var isFilled: Bool {
         switch self {
-        case .bagFilled, .cartFilled, .storeFilled: true
-        case .bag, .cart, .store, .shopify: false
+        case .cartFilled, .storeFilled: true
+        case .cart, .store, .shopify: false
         }
     }
 
     var title: String { family.title }
 
-    /// SF Symbol for bag options (nil for Polaris/Shopify asset glyphs).
-    var systemSymbolName: String? {
+    /// Asset catalog imageset name for the Polaris/Shopify glyph.
+    var assetName: String {
         switch self {
-        case .bag: "bag"
-        case .bagFilled: "bag.fill"
-        case .cart, .cartFilled, .store, .storeFilled, .shopify: nil
-        }
-    }
-
-    /// Asset catalog imageset name for Polaris/Shopify glyphs (nil for SF Symbol bag).
-    var assetName: String? {
-        switch self {
-        case .bag, .bagFilled: nil
-        case .cart: "CartIcon"
+        case .cart: "CartOutlineIcon"
         case .cartFilled: "CartFilledIcon"
-        case .store: "StoreIcon"
+        case .store: "StoreOutlineIcon"
         case .storeFilled: "StoreFilledIcon"
         case .shopify: "ShopifyIcon"
         }
     }
 
+    /// Menu bar draw size. The outline SVGs are 16×16 edge-to-edge while the filled and
+    /// Shopify ones are 20×20 with built-in padding, so they need different sizes to match.
+    var menuBarPointSize: CGFloat {
+        switch self {
+        case .cart, .store: 16.5
+        case .cartFilled, .storeFilled: 19.5
+        case .shopify: 20.5
+        }
+    }
+
     static func preference(family: Family, filled: Bool) -> MenuBarIconPreference {
         switch (family, filled) {
-        case (.bag, false): .bag
-        case (.bag, true): .bagFilled
         case (.cart, false): .cart
         case (.cart, true): .cartFilled
         case (.store, false): .store
@@ -267,8 +270,8 @@ struct AppSettings: Codable, Equatable {
     var appearancePreference: AppearancePreference = .system
     /// Auto / Light / Dark Dock icon (cmux-style). Auto uses Icon Composer chrome.
     var appIconPreference: AppIconPreference = .system
-    /// Glyph shown in the menu bar status item (Polaris bag / cart / store).
-    var menuBarIconPreference: MenuBarIconPreference = .bag
+    /// Glyph shown in the menu bar status item (Polaris cart / store / Shopify).
+    var menuBarIconPreference: MenuBarIconPreference = .store
     /// When true, the menu bar widget uses opaque chrome instead of Liquid Glass vibrancy.
     /// Ignored when `widgetThemePreference` is `.shopify` (Polaris is always flat/opaque).
     var opaqueMenuBarWidget: Bool = false
@@ -312,7 +315,7 @@ extension AppSettings {
         showStarredStoresInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showStarredStoresInMenuBar) ?? true
         appearancePreference = try c.decodeIfPresent(AppearancePreference.self, forKey: .appearancePreference) ?? .system
         appIconPreference = try c.decodeIfPresent(AppIconPreference.self, forKey: .appIconPreference) ?? .system
-        menuBarIconPreference = try c.decodeIfPresent(MenuBarIconPreference.self, forKey: .menuBarIconPreference) ?? .bag
+        menuBarIconPreference = try c.decodeIfPresent(MenuBarIconPreference.self, forKey: .menuBarIconPreference) ?? .store
         opaqueMenuBarWidget = try c.decodeIfPresent(Bool.self, forKey: .opaqueMenuBarWidget) ?? false
         widgetThemePreference = try c.decodeIfPresent(WidgetThemePreference.self, forKey: .widgetThemePreference) ?? .macOS
         globalHotkey = try c.decodeIfPresent(KeyCombo.self, forKey: .globalHotkey) ?? .default

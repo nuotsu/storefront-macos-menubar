@@ -106,7 +106,7 @@ private enum IconSettingsMetrics {
     static let controlWidth: CGFloat = 206
 }
 
-/// Split controls: Outline/Filled style + Bag/Cart/Store/Shopify icon chips.
+/// Split controls: Outline/Filled style + Store/Cart/Shopify icon chips.
 private struct MenuBarIconPreferencePicker: View {
     @Binding var selection: MenuBarIconPreference
 
@@ -171,20 +171,13 @@ private struct MenuBarIconChip: View {
     private let cornerRadius: CGFloat = 7
     private let ringInset: CGFloat = 2
 
-    @ViewBuilder
     private var glyph: some View {
-        if let symbolName = preference.systemSymbolName {
-            Image(systemName: symbolName)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Theme.textPrimary)
-        } else if let assetName = preference.assetName {
-            Image(assetName)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 20, height: 20)
-                .foregroundStyle(Theme.textPrimary)
-        }
+        Image(preference.assetName)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: preference.menuBarPointSize, height: preference.menuBarPointSize)
+            .foregroundStyle(Theme.textPrimary)
     }
 
     var body: some View {
@@ -425,32 +418,26 @@ private struct WidgetThemePreview: View {
     }
 }
 
-/// Flat Polaris-style mini panel: gray page + white bordered rail/cards.
+/// Polaris-style mini panel: flush dark sidebar + white inset main sheet with bordered cards.
 private struct ShopifyThemePreview: View {
     var body: some View {
         ZStack {
-            Theme.Shopify.pageBackground
+            Theme.Shopify.Sidebar.fill
 
-            HStack(alignment: .top, spacing: 3) {
-                RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                    .fill(Theme.Shopify.surface)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                            .strokeBorder(Theme.Shopify.border, lineWidth: 0.5)
-                    }
-                    .frame(width: 16)
-                    .overlay(alignment: .top) {
-                        VStack(spacing: 2) {
-                            Capsule()
-                                .fill(Color.black.opacity(0.18))
-                                .frame(width: 10, height: 2.5)
-                            Capsule()
-                                .fill(Color.black.opacity(0.12))
-                                .frame(width: 10, height: 2.5)
-                        }
-                        .padding(.top, 4)
-                    }
+            HStack(alignment: .top, spacing: 0) {
+                // Non-floating sidebar: nav marks sit directly on the dark fill.
+                VStack(alignment: .leading, spacing: 2) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.55))
+                        .frame(width: 10, height: 2.5)
+                    Capsule()
+                        .fill(Color.white.opacity(0.3))
+                        .frame(width: 10, height: 2.5)
+                }
+                .padding(.top, 6)
+                .frame(width: 22)
 
+                // White main sheet, inset on the top, trailing and bottom edges.
                 VStack(spacing: 3) {
                     ForEach(0..<2, id: \.self) { _ in
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -463,9 +450,14 @@ private struct ShopifyThemePreview: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .frame(maxWidth: .infinity)
+                .padding(4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Theme.Shopify.pageBackground)
+                )
+                .padding([.top, .trailing, .bottom], 3)
             }
-            .padding(8)
         }
     }
 }

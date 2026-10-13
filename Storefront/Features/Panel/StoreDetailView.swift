@@ -276,7 +276,7 @@ private struct CopyableHandleView: View {
     }
 
     private var handleFont: Font {
-        .mono(10.5)
+        .panel(11, shopify: isShopify)
     }
 
     var body: some View {
@@ -921,8 +921,15 @@ private struct CardLinkRow: View {
             // Active highlight is AppState-driven only — never stack hover + arrow
             // highlights. Expanded search without active focus keeps no fill.
             if isActive {
-                RoundedRectangle(cornerRadius: 5, style: isShopify ? .circular : .continuous)
+                let shape = RoundedRectangle(cornerRadius: 5, style: isShopify ? .circular : .continuous)
+                shape
                     .fill(isShopify ? Theme.Shopify.rowHighlightFill : Theme.controlFill)
+                    .overlay {
+                        shape.strokeBorder(
+                            isShopify ? Theme.Shopify.rowHighlightBorder : Theme.controlBorder,
+                            lineWidth: 0.5
+                        )
+                    }
             }
         }
     }

@@ -29,6 +29,8 @@ enum Theme {
 
     static let hoverFill = Color.adaptive(light: .black.opacity(0.045), dark: .white.opacity(0.07))
     static let controlFill = Color.adaptive(light: .black.opacity(0.07), dark: .white.opacity(0.1))
+    /// Hairline around an active row filled with `controlFill`, a step darker than it.
+    static let controlBorder = Color.adaptive(light: .black.opacity(0.1), dark: .white.opacity(0.14))
     static let searchFill = Color.adaptive(light: .black.opacity(0.055), dark: .white.opacity(0.08))
     static let hairline = Color.adaptive(light: .black.opacity(0.07), dark: .white.opacity(0.08))
     static let divider = Color.adaptive(light: .black.opacity(0.08), dark: .white.opacity(0.08))
@@ -84,15 +86,17 @@ enum Theme {
         static let iconSecondary = Color(hex: "4a4a4a")
         /// Active (hovered / arrow-focused) card link row.
         static let rowHighlightFill = Color(hex: "f7f7f7")
+        /// Hairline around the active card link row, a step darker than its fill.
+        static let rowHighlightBorder = Color(hex: "ebebeb")
         static let textSecondary = Color(hex: "616161")
         static let textMeta = Color(hex: "8a8a8a")
         /// Copy-confirmation checkmark. Polaris `color-icon-success`.
         static let iconSuccess = Color(hex: "29845a")
-        /// AppKit fill for the hosting view under SwiftUI.
-        static var pageBackgroundNSColor: NSColor { .white }
         /// Dark admin nav column (new Shopify admin) — fixed, independent of appearance.
         enum Sidebar {
             static let fill = Color(hex: "0a0a0a")
+            /// AppKit `fill` for the popover frame, so the beak matches the sidebar.
+            static var fillNSColor: NSColor { NSColor(srgbRed: 10 / 255, green: 10 / 255, blue: 10 / 255, alpha: 1) }
             static let textPrimary = Color.white
             /// Non-selected nav item label (admin settings nav `#dcdcdc`).
             static let textItem = Color(hex: "dcdcdc")
