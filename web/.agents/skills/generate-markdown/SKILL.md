@@ -34,6 +34,7 @@ Walk the block array **in order**. Transcribe verbatim — no paraphrasing, no r
 | span mark → `markDefs` link, `type: 'link'`, internal (`internal._ref`) | resolve the reference to a real href first — see Step 4.2 — then `[text](href)` |
 | `_type: 'code'` array member (`language`, `filename`, `code`) | fenced block, `` ```<language> ``. Put `filename` as a bold label on its own line above the fence — fences can't carry it, and the raw `.md` route has no renderer to display it otherwise. Never alter the `code` string itself. |
 | `_type: 'image'` array member | see Step 3 |
+| `_type: 'table'` array member (`headerRows`, `rows[].cells[].value`) | GitHub-flavored Markdown table. Each cell's `value` is a block array: convert its spans with the mark rules above and join blocks with a space; escape `|` as `\|`. The first row is the header row when `headerRows >= 1`; when `headerRows` is 0 or missing, emit an empty header row (`| | |`) so the table stays valid. |
 | `_type: 'custom-html'` array member | drop it — raw script/widget embeds (comment widgets, analytics snippets) have no meaningful Markdown form, unless the user explicitly wants the raw HTML kept inline |
 
 ## Step 3 — Convert images to Sanity CDN links

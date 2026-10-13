@@ -51,7 +51,18 @@ export default defineModule({
 					options: { withFilename: true },
 				}),
 				{ type: 'custom-html' },
+				{ type: 'table' },
 			],
+			// Built-in PTE table editing (Studio ≥ 6.6) is off by default.
+			components: {
+				portableText: {
+					plugins: (props) =>
+						props.renderDefault({
+							...props,
+							plugins: { ...props.plugins, table: { enabled: true } },
+						}),
+				},
+			},
 			group: 'content',
 		}),
 		defineField({

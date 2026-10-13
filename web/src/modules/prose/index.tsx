@@ -8,6 +8,7 @@ import TableOfContents from '@/ui/table-of-contents'
 import AnchoredHeading from './anchored-heading'
 import Code from './code'
 import Image from './image'
+import Table from './table'
 
 export default function ({
 	content,
@@ -45,6 +46,7 @@ export default function ({
 							image: Image,
 							code: Code,
 							'custom-html': ({ value }) => <CustomHTML {...value} />,
+							table: Table,
 						},
 					}}
 				/>
