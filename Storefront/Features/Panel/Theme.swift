@@ -121,11 +121,6 @@ enum Theme {
     /// Floating / under-mouse panel chrome corner radius (matches `AppDelegate` window mask).
     static let floatingPanelCornerRadius: CGFloat = 14
 
-    /// Detached floating window (under mouse, or menu bar icon hidden).
-    static func isFloatingPanel(settings: AppSettings) -> Bool {
-        !settings.showInMenuBar || settings.openUnderMouse
-    }
-
     /// Distance from the panel’s top-leading origin to the center of the first
     /// store row in the rail (search + “N Stores” + dividers + half a row).
     /// Used to open the detached floating panel under the pointer.
@@ -251,5 +246,19 @@ extension Color {
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             return NSColor(isDark ? dark : light)
         }))
+    }
+}
+
+private struct IsFloatingPanelKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Set by each hosting controller: true inside the detached floating window, false in
+    /// the menu bar popover. Not derived from settings — with Open under mouse on, the
+    /// popover still opens from icon clicks and must keep popover chrome.
+    var isFloatingPanel: Bool {
+        get { self[IsFloatingPanelKey.self] }
+        set { self[IsFloatingPanelKey.self] = newValue }
     }
 }

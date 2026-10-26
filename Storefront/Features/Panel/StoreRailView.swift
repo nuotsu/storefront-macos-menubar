@@ -10,9 +10,7 @@ struct StoreRailView: View {
         WidgetChrome.current(settings: appState.settings)
     }
 
-    private var isFloatingPanel: Bool {
-        Theme.isFloatingPanel(settings: appState.settings)
-    }
+    @Environment(\.isFloatingPanel) private var isFloatingPanel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

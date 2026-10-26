@@ -15,10 +15,7 @@ struct PanelView: View {
     @State private var suppressRailSearchRefocus = false
     @Environment(\.openWindow) private var openWindow
 
-    /// Detached floating window (under mouse, or menu bar icon hidden).
-    private var isFloatingPanel: Bool {
-        Theme.isFloatingPanel(settings: appState.settings)
-    }
+    @Environment(\.isFloatingPanel) private var isFloatingPanel
 
     /// `.system` resolves against `NSApp.effectiveAppearance` at call time, so nothing
     /// stored changes when macOS flips Light↔Dark. Reading the revision registers the

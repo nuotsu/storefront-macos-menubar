@@ -38,6 +38,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Borderless movable panel used when the menu bar icon is hidden (no popover beak).
     private var floatingPanel: StorefrontFloatingPanel?
     private var floatingPanelHosting: NSViewController?
+    /// Which panel window is open, tracked here rather than read back from AppKit:
+    /// `NSPopover.isShown` stays true for ~0.5 s after `performClose` (the close morph),
+    /// which made toggles in that window misfire.
+    private enum PanelSurface { case hidden, popover, floating }
+    private var visibleSurface: PanelSurface = .hidden
+    /// A popover show requested while the previous close is still animating. AppKit
+    /// would queue it itself, but `performClose` can't cancel that — this one can.
+    private var pendingPopoverShow: (() -> Void)?
     private var floatingClickOutsideMonitor: Any?
     private var floatingGlobalClickOutsideMonitor: Any?
     /// Suppresses click-outside dismiss briefly (⌘-click keep-open → browser activation).
@@ -71,7 +79,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pop.contentSize = Theme.panelSize
         pop.delegate = self
         let hosting = NSHostingController(
-            rootView: PanelView().environment(appState)
+            rootView: PanelView()
+                .environment(appState)
+                .environment(\.isFloatingPanel, false)
         )
         hosting.view.wantsLayer = true
         hosting.view.focusRingType = .none
@@ -361,21 +371,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Always opens (or re-opens) the widget under `anchor` with `store` selected.
     private func reopenPanel(selecting store: Store, anchorRect: NSRect, in button: NSStatusBarButton) {
         appState.select(store)
-        let wasVisible = isPanelVisible
-        if wasVisible {
+        if isPanelVisible {
             closePanel()
         }
-        // After a close, wait a turn so the transient popover fully tears down before re-show.
-        let present = { [weak self] in
-            guard let self else { return }
-            self.preparePanelForShow()
-            self.showPopover(anchorRect: anchorRect, in: button)
-        }
-        if wasVisible {
-            DispatchQueue.main.async(execute: present)
-        } else {
-            present()
-        }
+        // `showPopover` waits out a still-animating close on its own.
+        preparePanelForShow()
+        showPopover(anchorRect: anchorRect, in: button)
     }
 
     private func showPopover(anchorRect: NSRect, in button: NSStatusBarButton) {
@@ -383,11 +384,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showFloatingPanel()
             return
         }
+        hideFloatingPanel()
+        visibleSurface = .popover
         // Optical nudge: glyphs often sit slightly right of midX; shift so the arrow lines up.
         var anchor = anchorRect
         anchor.origin.x += 1
-        popover.show(relativeTo: anchor, of: button, preferredEdge: .minY)
-        popover.contentViewController?.view.window?.becomeKey()
+        let present = { [weak self, weak button] in
+            guard let self, let button, let popover = self.popover else { return }
+            popover.show(relativeTo: anchor, of: button, preferredEdge: .minY)
+            popover.contentViewController?.view.window?.becomeKey()
+        }
+        // Still closing from a moment ago — show from `popoverDidClose` instead.
+        if popover.isShown {
+            pendingPopoverShow = present
+        } else {
+            present()
+        }
     }
 
     /// The glyph's own slot within the grouped item, so the beak points at the icon
@@ -496,7 +508,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Panel (hotkey + status click)
 
     private var isPanelVisible: Bool {
-        (popover?.isShown ?? false) || (floatingPanel?.isVisible ?? false)
+        switch visibleSurface {
+        case .hidden: false
+        case .popover: true
+        case .floating: floatingPanel?.isVisible ?? false
+        }
     }
 
     func togglePanel(anchorToMenuBarIcon: Bool = false) {
@@ -527,11 +543,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func closePanel() {
         appState.flushPendingSaves()
+        pendingPopoverShow = nil
+        visibleSurface = .hidden
         popover?.performClose(nil)
         hideFloatingPanel()
     }
 
     private func showFloatingPanel() {
+        // One surface at a time.
+        pendingPopoverShow = nil
+        popover?.performClose(nil)
+        visibleSurface = .floating
         let panel = ensureFloatingPanel()
         panel.setFrame(Self.clampedFloatingPanelFrame(near: NSEvent.mouseLocation), display: true)
         applyAppearancePreference(appState.settings.appearancePreference)
@@ -546,6 +568,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func hideFloatingPanel() {
+        if visibleSurface == .floating {
+            visibleSurface = .hidden
+        }
         stopFloatingClickOutsideMonitor()
         floatingPanel?.orderOut(nil)
     }
@@ -582,7 +607,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Not type-erased through AnyView — that would hide the panel's real view type
         // from SwiftUI's structural diffing at the hosting root.
         let hosting = NSHostingController(
-            rootView: PanelView().environment(appState)
+            rootView: PanelView()
+                .environment(appState)
+                .environment(\.isFloatingPanel, true)
         )
         hosting.view.wantsLayer = true
         hosting.view.focusRingType = .none
@@ -633,6 +660,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             let point = NSEvent.mouseLocation
             if panel.frame.contains(point) { return }
+            // Our own menu bar icon toggles on mouse-up; closing here first turned that
+            // click into a swap to the popover instead of a close.
+            if let statusWindow = self.statusItem?.button?.window, statusWindow.frame.contains(point) {
+                return
+            }
             // Keep open when interacting with Settings.
             if let settings = Self.findSettingsWindow(), settings.isVisible, settings.frame.contains(point) {
                 return
@@ -897,6 +929,20 @@ extension AppDelegate: NSPopoverDelegate {
     /// Frame view (incl. beak) only exists once the popover window is about to appear.
     func popoverWillShow(_ notification: Notification) {
         applyPanelBackgroundOpacity(appState.settings.opaqueMenuBarWidget)
+    }
+
+    /// Counts as closed from the start of the close morph (transient dismissals
+    /// included), not from when `isShown` finally flips.
+    func popoverWillClose(_ notification: Notification) {
+        if visibleSurface == .popover, pendingPopoverShow == nil {
+            visibleSurface = .hidden
+        }
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        guard let present = pendingPopoverShow else { return }
+        pendingPopoverShow = nil
+        present()
     }
 }
 

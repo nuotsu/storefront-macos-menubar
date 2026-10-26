@@ -117,9 +117,7 @@ struct StoreDetailView: View {
         }
     }
 
-    private var isFloatingPanel: Bool {
-        Theme.isFloatingPanel(settings: appState.settings)
-    }
+    @Environment(\.isFloatingPanel) private var isFloatingPanel
 
     private func header(chrome: WidgetChrome) -> some View {
         let isShopify = chrome.isShopify
