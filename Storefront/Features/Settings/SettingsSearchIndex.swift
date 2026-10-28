@@ -105,7 +105,7 @@ enum SettingsSearchIndex {
         hit("about.feedback", "Send Feedback", "About", .about, ["contact", "support", "feedback"]),
     ]
 
-    static func hits(query: String, storeNames: [String], sectionTitles: [String]) -> [SettingsSearchHit] {
+    static func hits(query: String, storeNames: [String], sections: [SectionID]) -> [SettingsSearchHit] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         // Bail before building anything — an empty query shows no hits at all.
         guard !q.isEmpty else { return [] }
@@ -116,8 +116,11 @@ enum SettingsSearchIndex {
             let storeHit = hit("store.\(name)", name, "Stores", .stores, ["store", "shop"])
             if storeHit.matches(loweredQuery: q) { matched.append(storeHit) }
         }
-        for title in sectionTitles {
-            let sectionHit = hit("section.\(title)", title, "Sections", .sections, ["section", "admin", "card"])
+        for section in sections {
+            // Link titles as keywords, so a link that lives inside another card
+            // (Collections in Products) still finds the card that holds it.
+            let linkTitles = StaticLinkCatalog.rows(for: section).map(\.title)
+            let sectionHit = hit("section.\(section.title)", section.title, "Sections", .sections, ["section", "admin", "card"] + linkTitles)
             if sectionHit.matches(loweredQuery: q) { matched.append(sectionHit) }
         }
 

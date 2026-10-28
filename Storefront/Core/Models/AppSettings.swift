@@ -9,6 +9,25 @@ struct SavedSectionPreset: Identifiable, Codable, Equatable {
     var enabledSections: Set<SectionID>
 }
 
+extension SavedSectionPreset {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        sectionOrder = try c.decodeSectionIDsIfPresent(forKey: .sectionOrder) ?? []
+        enabledSections = Set(try c.decodeSectionIDsIfPresent(forKey: .enabledSections) ?? [])
+    }
+}
+
+extension KeyedDecodingContainer {
+    /// Decodes stored section IDs, dropping any this build no longer has (e.g. the old
+    /// standalone Collections section, now a row in Products) instead of failing the
+    /// whole settings file.
+    func decodeSectionIDsIfPresent(forKey key: Key) throws -> [SectionID]? {
+        try decodeIfPresent([String].self, forKey: key)?.compactMap(SectionID.init(rawValue:))
+    }
+}
+
 /// Dock / About icon choice — mirrors cmux `AppIconMode`.
 ///
 /// Auto (and Light/Dark when they already match system) clear
@@ -306,8 +325,8 @@ struct AppSettings: Codable, Equatable {
 extension AppSettings {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        sectionOrder = try c.decodeIfPresent([SectionID].self, forKey: .sectionOrder) ?? SectionID.defaultOrder
-        enabledSections = try c.decodeIfPresent(Set<SectionID>.self, forKey: .enabledSections) ?? Set(SectionID.allCases)
+        sectionOrder = try c.decodeSectionIDsIfPresent(forKey: .sectionOrder) ?? SectionID.defaultOrder
+        enabledSections = try c.decodeSectionIDsIfPresent(forKey: .enabledSections).map(Set.init) ?? Set(SectionID.allCases)
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? false
         showInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showInMenuBar) ?? true
         showInDock = try c.decodeIfPresent(Bool.self, forKey: .showInDock) ?? true

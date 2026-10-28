@@ -35,7 +35,7 @@ struct SettingsRootView: View {
         SettingsSearchIndex.hits(
             query: searchText,
             storeNames: appState.stores.map(\.displayName),
-            sectionTitles: SectionID.allCases.map(\.title)
+            sections: SectionID.allCases
         )
     }
 

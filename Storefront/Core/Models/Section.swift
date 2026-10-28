@@ -2,7 +2,6 @@ import Foundation
 
 enum SectionID: String, Codable, CaseIterable, Hashable {
     case products
-    case collections
     case themes
     case navigationAndRedirects
     case orders
@@ -16,7 +15,6 @@ enum SectionID: String, Codable, CaseIterable, Hashable {
     var title: String {
         switch self {
         case .products: return "Products"
-        case .collections: return "Collections"
         case .themes: return "Themes"
         case .navigationAndRedirects: return "Navigation"
         case .orders: return "Orders"
@@ -34,7 +32,6 @@ enum SectionID: String, Codable, CaseIterable, Hashable {
     var iconName: String {
         switch self {
         case .products: return "ProductIcon"
-        case .collections: return "CollectionIcon"
         case .themes: return "SectionsIcon"
         case .navigationAndRedirects: return "MenuIcon"
         case .orders: return "OrderIcon"
@@ -51,7 +48,7 @@ enum SectionID: String, Codable, CaseIterable, Hashable {
     /// has no literal top-level equivalent there (it lives under Online Store), so it's
     /// placed next to Themes/Content, the closest real grouping.
     static var defaultOrder: [SectionID] {
-        [.orders, .products, .collections, .customers, .discounts, .content, .analytics, .themes, .navigationAndRedirects, .apps, .settings]
+        [.orders, .products, .customers, .discounts, .content, .analytics, .themes, .navigationAndRedirects, .apps, .settings]
     }
 }
 
@@ -79,11 +76,11 @@ enum SectionPreset: String, CaseIterable, Identifiable, Hashable {
         case .default:
             return SectionID.defaultOrder
         case .storeManager:
-            return [.orders, .customers, .products, .collections, .themes, .apps, .settings]
+            return [.orders, .customers, .products, .themes, .apps, .settings]
         case .marketer:
-            return [.analytics, .discounts, .products, .collections, .apps, .settings]
+            return [.analytics, .discounts, .products, .apps, .settings]
         case .developer:
-            return [.themes, .content, .products, .collections, .navigationAndRedirects, .apps, .settings]
+            return [.themes, .content, .products, .navigationAndRedirects, .apps, .settings]
         }
     }
 
@@ -212,12 +209,9 @@ enum StaticLinkCatalog {
         case .products:
             return [
                 LinkRow(id: "products.all", title: "Products", path: "/products", iconName: "ProductIcon", createAction: .init(path: "/products/new", noun: "Product"), supportsSearch: true, shortcutKey: "p"),
+                LinkRow(id: "products.collections", title: "Collections", path: "/collections", iconName: "CollectionIcon", createAction: .init(path: "/collections/new", noun: "Collection"), supportsSearch: true, shortcutKey: "c"),
                 LinkRow(id: "products.inventory", title: "Inventory", path: "/products/inventory", iconName: "InventoryIcon", supportsSearch: true),
                 LinkRow(id: "products.giftCards", title: "Gift Cards", path: "/gift_cards", iconName: "GiftCardIcon"),
-            ]
-        case .collections:
-            return [
-                LinkRow(id: "collections.all", title: "Collections", path: "/collections", iconName: "CollectionIcon", createAction: .init(path: "/collections/new", noun: "Collection"), supportsSearch: true, shortcutKey: "c"),
             ]
         case .themes:
             return [
