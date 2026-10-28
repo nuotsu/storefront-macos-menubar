@@ -89,8 +89,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover = pop
 
         applyActivationPolicy()
+        // Also applies the panel background opacity.
         applyAppearancePreference(appState.settings.appearancePreference)
-        applyPanelBackgroundOpacity(appState.settings.opaqueMenuBarWidget)
         // After launch — Tahoe can wedge if `applicationIconImage` runs in App.init.
         AppIconPreference.apply(appState.settings.appIconPreference)
         observeSystemAppearanceChanges()
@@ -556,8 +556,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         visibleSurface = .floating
         let panel = ensureFloatingPanel()
         panel.setFrame(Self.clampedFloatingPanelFrame(near: NSEvent.mouseLocation), display: true)
+        // Also applies the panel background opacity.
         applyAppearancePreference(appState.settings.appearancePreference)
-        applyPanelBackgroundOpacity(appState.settings.opaqueMenuBarWidget)
         NSApp.activate(ignoringOtherApps: true)
         // Brief grace so the opening interaction can't immediately dismiss us.
         suppressFloatingClickOutsideUntil = Date().addingTimeInterval(0.2)

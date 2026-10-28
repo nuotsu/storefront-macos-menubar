@@ -6,7 +6,6 @@ struct SettingsSearchHit: Identifiable, Hashable {
     let title: String
     let subtitle: String
     let tab: SettingsTab
-    let keywords: [String]
     /// Title, subtitle and keywords pre-lowered at construction. The static index is a
     /// `static let`, so these are built once per process instead of re-lowering every
     /// field of all ~68 entries on each keystroke. Kept as separate strings rather than
@@ -139,7 +138,6 @@ enum SettingsSearchIndex {
             title: title,
             subtitle: subtitle,
             tab: tab,
-            keywords: keywords,
             haystack: ([title, subtitle] + keywords).map { $0.lowercased() }
         )
     }

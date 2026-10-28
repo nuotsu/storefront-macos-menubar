@@ -158,8 +158,6 @@ enum MenuBarIconPreference: String, Codable, CaseIterable, Identifiable, Hashabl
         }
     }
 
-    var title: String { family.title }
-
     /// Asset catalog imageset name for the Polaris/Shopify glyph.
     var assetName: String {
         switch self {

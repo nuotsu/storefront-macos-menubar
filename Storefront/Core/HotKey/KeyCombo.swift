@@ -67,11 +67,15 @@ struct KeyCombo: Codable, Equatable {
         "5": kVK_ANSI_5, "6": kVK_ANSI_6, "7": kVK_ANSI_7, "8": kVK_ANSI_8, "9": kVK_ANSI_9,
     ]
 
-    /// Derived once from `alphanumericKeyCodes`, so the display-glyph lookup doesn't
-    /// maintain its own separate copy of the same letter/digit table.
-    private static let alphanumericDisplayStrings: [Int: String] = Dictionary(
-        uniqueKeysWithValues: alphanumericKeyCodes.map { (Int($0.value), String($0.key).uppercased()) }
+    /// Reverse of `alphanumericKeyCodes`, derived once so key-code → character lookups
+    /// (display glyphs, mnemonics, menu equivalents) don't each scan the table.
+    private static let alphanumericCharacters: [Int: Character] = Dictionary(
+        uniqueKeysWithValues: alphanumericKeyCodes.map { ($0.value, $0.key) }
     )
+
+    private static let alphanumericDisplayStrings: [Int: String] = alphanumericCharacters.mapValues {
+        String($0).uppercased()
+    }
 
     private static let namedKeyDisplayStrings: [Int: String] = [
         kVK_Space: "Space", kVK_Return: "⏎", kVK_Tab: "⇥", kVK_Delete: "⌫", kVK_Escape: "⎋",
@@ -92,7 +96,7 @@ struct KeyCombo: Codable, Equatable {
     /// combo has modifiers or isn't a letter (digits, Escape, arrows, etc.).
     var mnemonicLetter: Character? {
         guard modifierFlags == 0,
-              let letter = Self.alphanumericKeyCodes.first(where: { $0.value == Int(keyCode) })?.key,
+              let letter = Self.alphanumericCharacters[Int(keyCode)],
               letter.isLetter
         else { return nil }
         return letter
@@ -140,7 +144,7 @@ struct KeyCombo: Codable, Equatable {
         if modifierFlags & UInt32(optionKey) != 0 { mask.insert(.option) }
         if modifierFlags & UInt32(shiftKey) != 0 { mask.insert(.shift) }
         if modifierFlags & UInt32(cmdKey) != 0 { mask.insert(.command) }
-        guard let letter = Self.alphanumericKeyCodes.first(where: { $0.value == Int(keyCode) })?.key else {
+        guard let letter = Self.alphanumericCharacters[Int(keyCode)] else {
             return ("", mask)
         }
         return (String(letter), mask)

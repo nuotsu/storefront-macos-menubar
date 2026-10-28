@@ -16,7 +16,6 @@ enum WidgetChrome: Equatable {
     }
 
     var isShopify: Bool { self == .shopify }
-    var isOpaque: Bool { self != .macOSGlass }
 
     /// Polaris uses circular arcs; macOS chrome keeps continuous squircles.
     var cornerStyle: RoundedCornerStyle { isShopify ? .circular : .continuous }
@@ -35,9 +34,7 @@ enum Theme {
     static let hairline = Color.adaptive(light: .black.opacity(0.07), dark: .white.opacity(0.08))
     static let divider = Color.adaptive(light: .black.opacity(0.08), dark: .white.opacity(0.08))
     static let borderColor = Color.adaptive(light: .black.opacity(0.12), dark: .white.opacity(0.1))
-    /// Light plate behind store favicons in dark appearance so dark logos stay legible.
-    static let faviconPlate = Color.adaptive(light: .clear, dark: .white)
-    /// Matching AppKit fill opacity for menu-bar favicon drawing (dark appearance only).
+    /// White plate opacity behind menu-bar favicons in dark appearance, so dark logos stay legible.
     static let faviconPlateDarkOpacity: CGFloat = 1
 
     /// Flat card border — the fill comes from `SidebarGlassBackground` for panel section cards.
@@ -74,11 +71,6 @@ enum Theme {
         static let border = Color(hex: "e3e3e3")
         /// Softer hairlines inside surfaces.
         static let hairline = Color(hex: "ebebeb")
-        /// Nav / row hover + selected fill.
-        static let hoverFill = Color(hex: "f1f1f1")
-        /// Search field fill (white with border, not a gray wash).
-        static let searchFill = Color.white
-        static let searchBorder = Color(hex: "c9cccf")
         static let textPrimary = Color(hex: "303030")
         /// Card headings and card link icons.
         static let textStrong = Color(hex: "101010")

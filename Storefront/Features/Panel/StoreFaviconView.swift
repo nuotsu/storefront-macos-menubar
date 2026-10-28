@@ -22,8 +22,8 @@ struct StoreFaviconView: View {
                     .resizable()
                     .interpolation(.high)
                     .scaledToFill()
-                    // Environment scheme (not `Theme.faviconPlate`'s app appearance) so the
-                    // dark Shopify sidebar gets a plate inside the light-locked widget.
+                    // Environment scheme (not the app appearance) so the dark Shopify
+                    // sidebar gets a plate inside the light-locked widget.
                     .background(colorScheme == .dark ? Color.white : Color.clear)
             } else {
                 initialsFallback

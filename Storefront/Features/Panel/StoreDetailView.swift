@@ -81,6 +81,9 @@ struct StoreDetailView: View {
                                     focusedRowSearchID: focusedRowSearchID,
                                     onToggleLinkSearchKey: onToggleLinkSearchKey
                                 )
+                                // The binding and closure above defeat SwiftUI's own field
+                                // diff, so without this every focus move re-ran all cards.
+                                .equatable()
                                 .id(slot.section)
                             }
                             if row.slots.count == 1 {
@@ -111,9 +114,10 @@ struct StoreDetailView: View {
 
     /// Keeps the keyboard-focused card on screen while looping Left/Right through the grid.
     private func scrollToFocusedSection(proxy: ScrollViewProxy, index: Int) {
-        guard index < enabledSections.count else { return }
+        let sections = enabledSections
+        guard index < sections.count else { return }
         withAnimation(.easeOut(duration: 0.15)) {
-            proxy.scrollTo(enabledSections[index], anchor: .center)
+            proxy.scrollTo(sections[index], anchor: .center)
         }
     }
 
@@ -121,6 +125,10 @@ struct StoreDetailView: View {
 
     private func header(chrome: WidgetChrome) -> some View {
         let isShopify = chrome.isShopify
+        // Shared by Online Store and Support; each call converts colors and runs a
+        // WCAG contrast check, so resolve them once per header.
+        let pillBackground = store.color.pillBackground(colorScheme: colorScheme)
+        let pillText = store.color.pillTextColor(colorScheme: colorScheme)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 StoreFaviconView(store: store, size: 22)
@@ -154,8 +162,8 @@ struct StoreDetailView: View {
                     HeaderActionButton(
                         title: "Online Store",
                         iconName: "StoreOutlineIcon",
-                        background: store.color.pillBackground(colorScheme: colorScheme),
-                        foreground: store.color.pillTextColor(colorScheme: colorScheme),
+                        background: pillBackground,
+                        foreground: pillText,
                         shortcutLabel: appState.settings.openOnlineStoreHotkey.mnemonicLetter.map { String($0) }
                     ) {
                         openStoreLink(shopURL)
@@ -165,8 +173,8 @@ struct StoreDetailView: View {
                     HeaderActionButton(
                         title: "Support",
                         iconName: "QuestionCircleIcon",
-                        background: store.color.pillBackground(colorScheme: colorScheme),
-                        foreground: store.color.pillTextColor(colorScheme: colorScheme),
+                        background: pillBackground,
+                        foreground: pillText,
                         shortcutLabel: appState.settings.openSupportHotkey.mnemonicLetter.map { String($0) }
                     ) {
                         openStoreLink(supportURL)
@@ -366,6 +374,8 @@ struct ShortcutKeyLabel: View {
     let key: String
     @Environment(AppState.self) private var appState
 
+    private static let textColor = Color(hex: "7a7a7a")
+
     init(_ key: String) {
         self.key = key
     }
@@ -377,7 +387,7 @@ struct ShortcutKeyLabel: View {
             Text(key.uppercased())
         }
             .font(.system(size: 8, weight: .bold))
-            .foregroundStyle(Color(hex: "7a7a7a"))
+            .foregroundStyle(Self.textColor)
             .padding(.horizontal, 3)
             .padding(.vertical, 1)
             .background {
@@ -589,6 +599,7 @@ private struct PolarisPrimaryButtonChrome: View {
 /// ```
 /// Capsule (not 8px) to match the primary pill; bottom edge lightened from `#b5b5b5`.
 private struct PolarisSecondaryButtonChrome: View {
+    private static let bottomEdge = Color(hex: "c4c4c4")
     private let shape = Capsule()
 
     var body: some View {
@@ -599,7 +610,7 @@ private struct PolarisSecondaryButtonChrome: View {
             }
             .overlay {
                 shape
-                    .fill(Color(hex: "c4c4c4"))
+                    .fill(Self.bottomEdge)
                     .mask {
                         shape
                             .overlay {
@@ -641,7 +652,7 @@ private struct InsetCapsuleShadow: View {
 }
 
 /// One section's card in the right-column grid — a title label plus its compact link list.
-struct SectionCardView: View {
+struct SectionCardView: View, Equatable {
     let section: SectionID
     let store: Store
     var isFocused: Bool = false
@@ -649,6 +660,16 @@ struct SectionCardView: View {
     var focusedRowSearchID: FocusState<String?>.Binding
     var onToggleLinkSearchKey: () -> Bool = { false }
     @Environment(AppState.self) private var appState
+
+    /// The focus binding and ⌃S closure point at the same panel state for the panel's
+    /// lifetime, so they're left out. What the card reads from `appState` still
+    /// invalidates it through Observation.
+    static func == (lhs: SectionCardView, rhs: SectionCardView) -> Bool {
+        lhs.section == rhs.section
+            && lhs.store == rhs.store
+            && lhs.isFocused == rhs.isFocused
+            && lhs.focusedRowIndex == rhs.focusedRowIndex
+    }
 
     private var rows: [LinkRow] { StaticLinkCatalog.rows(for: section) }
     private var chrome: WidgetChrome { WidgetChrome.current(settings: appState.settings) }
@@ -691,6 +712,8 @@ struct SectionCardView: View {
                         focusedRowSearchID: focusedRowSearchID,
                         onToggleLinkSearchKey: onToggleLinkSearchKey
                     )
+                    // A row move only changes `isActive` on two rows; skip the rest.
+                    .equatable()
                 }
             }
             // Grid equalizes card height across a GridRow's two columns (see the comment
@@ -730,7 +753,7 @@ struct SectionCardView: View {
 /// A single static link within a section card. Fixed padding at all times — only the
 /// background fill toggles on hover — so hovering never shifts the row's size
 /// or its neighbors' positions.
-private struct CardLinkRow: View {
+private struct CardLinkRow: View, Equatable {
     let row: LinkRow
     let store: Store
     let section: SectionID
@@ -746,6 +769,16 @@ private struct CardLinkRow: View {
     /// re-armed following a keyboard scroll (`.onHover` does not re-fire for a
     /// stationary cursor).
     @State private var pointerInside = false
+
+    /// Same reasoning as `SectionCardView.==`. Rows come from the static catalog, so
+    /// the id stands in for the whole `LinkRow`.
+    static func == (lhs: CardLinkRow, rhs: CardLinkRow) -> Bool {
+        lhs.row.id == rhs.row.id
+            && lhs.store == rhs.store
+            && lhs.section == rhs.section
+            && lhs.rowIndex == rhs.rowIndex
+            && lhs.isActive == rhs.isActive
+    }
 
     /// Lives in `AppState` (not local `@State`) so the ⌃S keyboard shortcut can toggle a
     /// row's search regardless of which `CardLinkRow` instance it belongs to, and so
@@ -869,8 +902,11 @@ private struct CardLinkRow: View {
                 pointerInside = hovering
                 if hovering { tryActivateFromHover() }
             }
-            .onChange(of: appState.cardLinkHoverArmed) { _, armed in
-                if armed && pointerInside { becomeActive() }
+            // `&&` short-circuits, so only the row under the pointer reads (and so
+            // observes) `cardLinkHoverArmed`. Every arrow key flips it, and reading it
+            // unconditionally re-ran all ~30 rows each time.
+            .onChange(of: pointerInside && appState.cardLinkHoverArmed) { _, armedUnderPointer in
+                if armedUnderPointer { becomeActive() }
             }
 
             if isSearchExpanded {

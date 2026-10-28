@@ -336,8 +336,7 @@ struct StoresTabView: View {
     }
 
     private func beginAdding() {
-        let palette = ["1f6f4a", "c07a2c", "3a6ea8", "7a4b8c", "4a7a5c", "a8563a"]
-        newColorHex = palette[appState.stores.count % palette.count]
+        newColorHex = Store.defaultColorHex(forIndex: appState.stores.count)
         isAddingStore = true
     }
 
@@ -449,9 +448,6 @@ struct StoresTabView: View {
         }
     }
 }
-
-// MARK: - Drag reorder
-
 
 private extension View {
     /// Applied at both the outer Stores list and inside the edit sheet, since a

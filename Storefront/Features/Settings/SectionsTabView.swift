@@ -407,6 +407,3 @@ struct SectionsTabView: View {
         }
     }
 }
-
-// MARK: - Drag reorder
-

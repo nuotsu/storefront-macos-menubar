@@ -11,7 +11,6 @@ struct HowToUseTabView: View {
         var combos: [KeyCombo] = []
         /// Shown between each pair of combos (e.g. "-" for "⌘1 - ⌘9").
         var separator: String? = nil
-        var customBadges: [String] = []
     }
 
     private struct Step: Identifiable {
@@ -152,19 +151,13 @@ struct HowToUseTabView: View {
                                     .foregroundStyle(Theme.textSecondary)
                                 Spacer(minLength: 8)
                                 HStack(spacing: 6) {
-                                    if !bullet.customBadges.isEmpty {
-                                        ForEach(bullet.customBadges, id: \.self) { label in
-                                            SettingsTextBadge(label: label, fill: SettingsBadgeFill.onSurface)
+                                    ForEach(Array(bullet.combos.enumerated()), id: \.offset) { index, combo in
+                                        if index > 0, let separator = bullet.separator {
+                                            Text(separator)
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundStyle(Theme.textMeta40)
                                         }
-                                    } else {
-                                        ForEach(Array(bullet.combos.enumerated()), id: \.offset) { index, combo in
-                                            if index > 0, let separator = bullet.separator {
-                                                Text(separator)
-                                                    .font(.system(size: 11, weight: .medium))
-                                                    .foregroundStyle(Theme.textMeta40)
-                                            }
-                                            SettingsKeyBadge(combo: combo, fill: SettingsBadgeFill.onSurface)
-                                        }
+                                        SettingsKeyBadge(combo: combo, fill: SettingsBadgeFill.onSurface)
                                     }
                                 }
                             }

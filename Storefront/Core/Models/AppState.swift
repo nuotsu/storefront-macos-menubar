@@ -174,9 +174,9 @@ final class AppState {
 
     func setWidgetThemePreference(_ preference: WidgetThemePreference) {
         settings.widgetThemePreference = preference
-        // Re-apply so the panel picks up Shopify-forced light / opaque hosting fill.
+        // Re-apply so the panel picks up Shopify-forced light / opaque hosting fill
+        // (`applyAppearancePreference` ends by re-applying the background opacity).
         AppearancePreference.apply(settings.appearancePreference)
-        AppDelegate.shared?.applyPanelBackgroundOpacity(settings.opaqueMenuBarWidget)
         saveSettings()
     }
 
@@ -419,13 +419,6 @@ final class AppState {
         }
     }
 
-    /// Writes both files. Prefer `saveStores()` / `saveSettings()` where only one
-    /// domain changed — each `save()` re-encodes and atomically rewrites *both*.
-    func save() {
-        saveStores()
-        saveSettings()
-    }
-
     func saveStores() {
         pendingStoreSave?.cancel()
         pendingStoreSave = nil
@@ -464,13 +457,20 @@ final class AppState {
     }
 
     func addStore(domain: String, displayName: String, colorHex: String) {
+        let store = appendStore(domain: domain, displayName: displayName, colorHex: colorHex)
+        saveStores()
+        fetchFavicons(for: [store])
+    }
+
+    /// Appends without saving or fetching, so a CSV import can do both once for the batch
+    /// instead of rewriting stores.json and starting an unchunked favicon fetch per row.
+    private func appendStore(domain: String, displayName: String, colorHex: String) -> Store {
         let accountID = stores.first?.accountID ?? UUID()
         let nextOrder = (stores.map(\.sortOrder).max() ?? -1) + 1
         let store = Store(accountID: accountID, myshopifyDomain: domain, displayName: displayName, colorHex: colorHex, sortOrder: nextOrder)
         stores.append(store)
         if selectedStoreID == nil { selectedStoreID = store.id }
-        saveStores()
-        fetchFavicon(for: store)
+        return store
     }
 
     /// Updates identity fields for an existing store. Refetches the favicon when the domain changes.
@@ -482,7 +482,7 @@ final class AppState {
         saveStores()
         if domainChanged {
             FaviconStore.shared.remove(storeID: store.id)
-            fetchFavicon(for: stores[index], force: true)
+            fetchFavicons(for: [stores[index]], force: true)
         }
     }
 
@@ -492,9 +492,9 @@ final class AppState {
         await FaviconStore.shared.fetch(stores: stores, force: true)
     }
 
-    private func fetchFavicon(for store: Store, force: Bool = false) {
+    private func fetchFavicons(for stores: [Store], force: Bool = false) {
         Task {
-            await FaviconStore.shared.fetch(stores: [store], force: force)
+            await FaviconStore.shared.fetch(stores: stores, force: force)
         }
     }
 
@@ -513,8 +513,7 @@ final class AppState {
     /// Returns the number of stores actually added.
     @discardableResult
     func importStoresCSV(_ contents: String) -> Int {
-        let palette = ["1f6f4a", "c07a2c", "3a6ea8", "7a4b8c", "4a7a5c", "a8563a", "5c9fd6", "a37bb8"]
-        var added = 0
+        var added: [Store] = []
         let rows = CSV.parse(contents)
         for row in rows.dropFirst() where row.count >= 2 {
             let displayName = row[0].trimmingCharacters(in: .whitespaces)
@@ -522,11 +521,13 @@ final class AppState {
             guard !displayName.isEmpty, !rawDomain.isEmpty else { continue }
             let domain = Store.normalizedDomain(rawDomain)
             guard !stores.contains(where: { $0.myshopifyDomain == domain }) else { continue }
-            let colorHex = row.count >= 3 && !row[2].isEmpty ? row[2] : palette[stores.count % palette.count]
-            addStore(domain: domain, displayName: displayName, colorHex: colorHex)
-            added += 1
+            let colorHex = row.count >= 3 && !row[2].isEmpty ? row[2] : Store.defaultColorHex(forIndex: stores.count)
+            added.append(appendStore(domain: domain, displayName: displayName, colorHex: colorHex))
         }
-        return added
+        guard !added.isEmpty else { return 0 }
+        saveStores()
+        fetchFavicons(for: added)
+        return added.count
     }
 
     /// "Preset,Section,Title,Enabled" — one row per section per saved preset (built-ins omitted).

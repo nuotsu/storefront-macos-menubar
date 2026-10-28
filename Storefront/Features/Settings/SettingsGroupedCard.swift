@@ -118,14 +118,16 @@ struct SettingsDocsFooter: View {
             .padding(.top, 4)
     }
 
-    private static var attributedLabel: AttributedString {
+    /// `let`, not a computed `var`: every Settings pane draws this footer, and a
+    /// computed property re-parsed the Markdown on each body evaluation.
+    private static let attributedLabel: AttributedString = {
         (try? AttributedString(
             markdown: "Learn more in the [docs](https://storefront.nuotsu.dev/docs).",
             options: AttributedString.MarkdownParsingOptions(
                 interpretedSyntax: .inlineOnlyPreservingWhitespace
             )
         )) ?? AttributedString("Learn more in the docs.")
-    }
+    }()
 }
 
 /// Plain text action link for Settings footers — no pill chrome.

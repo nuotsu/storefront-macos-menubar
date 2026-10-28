@@ -37,7 +37,9 @@ enum CSV {
                 case ",":
                     currentRow.append(currentField)
                     currentField = ""
-                case "\n":
+                // `"\r\n"` is a single `Character` in Swift, so CRLF files (Excel, Google
+                // Sheets) never match `"\n"` alone and would parse as one long row.
+                case "\n", "\r\n":
                     currentRow.append(currentField)
                     rows.append(currentRow)
                     currentRow = []

@@ -5,22 +5,18 @@ import SwiftUI
 @Observable
 @MainActor
 final class HoverTooltipController {
-    static let coordinateSpaceName = "hoverTooltipContainer"
+    // Constants are `nonisolated` so default arguments and `onGeometryChange`'s
+    // `@Sendable` transform can read them off the main actor.
+    nonisolated static let coordinateSpaceName = "hoverTooltipContainer"
     /// Inset from the container edge when clamping a tooltip that would otherwise clip.
-    static let edgeMargin: CGFloat = 8
+    nonisolated static let edgeMargin: CGFloat = 8
     /// Gap between the hovered control and the tooltip above it.
-    static let anchorGap: CGFloat = 3
+    nonisolated static let anchorGap: CGFloat = 3
     /// Brief window after leaving a target where a neighbor can claim the bubble
     /// without a hide + re-delay.
-    static let dismissGrace: Duration = .milliseconds(100)
-
-    /// Where on the hover target the tooltip sits above.
-    enum VerticalAnchor: Equatable {
-        /// Above the top edge — default for compact controls.
-        case top
-        /// Above the vertical center — better for tall hit targets (e.g. row-height pills).
-        case center
-    }
+    nonisolated static let dismissGrace: Duration = .milliseconds(100)
+    /// Hover time before a tooltip appears, earlier than the system tooltip.
+    nonisolated static let showDelay: Duration = .seconds(1)
 
     struct Presentation: Equatable {
         let token: UUID
@@ -28,7 +24,6 @@ final class HoverTooltipController {
         let shortcut: KeyCombo?
         var anchor: CGRect
         var gap: CGFloat
-        var verticalAnchor: VerticalAnchor
         /// When set, Y is keyed off this rect’s top (e.g. store row) while X follows `anchor`.
         var verticalBand: CGRect?
     }
@@ -45,7 +40,6 @@ final class HoverTooltipController {
         shortcut: KeyCombo?,
         anchor: CGRect,
         gap: CGFloat = anchorGap,
-        verticalAnchor: VerticalAnchor = .top,
         verticalBand: CGRect? = nil
     ) {
         dismissTask?.cancel()
@@ -56,7 +50,6 @@ final class HoverTooltipController {
             shortcut: shortcut,
             anchor: anchor,
             gap: gap,
-            verticalAnchor: verticalAnchor,
             verticalBand: verticalBand
         )
     }
@@ -67,14 +60,6 @@ final class HoverTooltipController {
         if let verticalBand {
             presentation?.verticalBand = verticalBand
         }
-    }
-
-    /// Clears immediately when `token` still owns the presentation.
-    func dismiss(token: UUID) {
-        guard presentation?.token == token else { return }
-        dismissTask?.cancel()
-        dismissTask = nil
-        presentation = nil
     }
 
     /// Delays clear so a neighboring target can present and keep the bubble alive.
@@ -103,23 +88,13 @@ final class HoverTooltipController {
         container: CGSize,
         margin: CGFloat = edgeMargin,
         gap: CGFloat = anchorGap,
-        verticalAnchor: VerticalAnchor = .top,
         verticalBand: CGRect? = nil
     ) -> CGPoint {
         guard tooltipSize.width > 0, tooltipSize.height > 0,
               container.width > 0, container.height > 0
         else { return .zero }
 
-        let anchorY: CGFloat
-        if let verticalBand {
-            anchorY = verticalBand.minY
-        } else {
-            switch verticalAnchor {
-            case .top: anchorY = anchor.minY
-            case .center: anchorY = anchor.midY
-            }
-        }
-
+        let anchorY = verticalBand?.minY ?? anchor.minY
         var x = anchor.midX - tooltipSize.width / 2
         var y = anchorY - gap - tooltipSize.height
 
@@ -267,7 +242,6 @@ struct HoverTooltipHost: View {
                     tooltipSize: bubbleSize,
                     container: container.size,
                     gap: presentation.gap,
-                    verticalAnchor: presentation.verticalAnchor,
                     verticalBand: presentation.verticalBand
                 )
                 HoverTooltipBubble(
@@ -304,10 +278,7 @@ struct HoverTooltipHost: View {
 struct HoverTooltipModifier: ViewModifier {
     let text: String
     var shortcut: KeyCombo? = nil
-    /// Delay before the tooltip appears. Default 1s — earlier than the system tooltip.
-    var delay: Duration = .seconds(1)
     var gap: CGFloat = HoverTooltipController.anchorGap
-    var verticalAnchor: HoverTooltipController.VerticalAnchor = .top
     var verticalBand: CGRect? = nil
 
     @Environment(\.hoverTooltipController) private var tooltips
@@ -319,21 +290,19 @@ struct HoverTooltipModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background {
-                GeometryReader { geo in
-                    let frame = geo.frame(in: .named(HoverTooltipController.coordinateSpaceName))
-                    Color.clear
-                        .onAppear { anchor = frame }
-                        .onChange(of: frame) { _, newFrame in
-                            anchor = newFrame
-                            if isPresented {
-                                tooltips?.updateAnchor(
-                                    token: token,
-                                    anchor: newFrame,
-                                    verticalBand: verticalBand
-                                )
-                            }
-                        }
+            // Every tooltip target's frame moves on each scroll frame. `onGeometryChange`
+            // reports it without the extra `GeometryReader` view + `onChange` per target,
+            // and `anchor` is only read from closures, so writing it doesn't re-run `body`.
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .named(HoverTooltipController.coordinateSpaceName))
+            } action: { newFrame in
+                anchor = newFrame
+                if isPresented {
+                    tooltips?.updateAnchor(
+                        token: token,
+                        anchor: newFrame,
+                        verticalBand: verticalBand
+                    )
                 }
             }
             .onChange(of: verticalBand) { _, band in
@@ -353,7 +322,7 @@ struct HoverTooltipModifier: ViewModifier {
                     }
                     showTask = Task { @MainActor in
                         do {
-                            try await Task.sleep(for: delay)
+                            try await Task.sleep(for: HoverTooltipController.showDelay)
                         } catch {
                             return
                         }
@@ -379,7 +348,6 @@ struct HoverTooltipModifier: ViewModifier {
                 shortcut: shortcut,
                 anchor: anchor,
                 gap: gap,
-                verticalAnchor: verticalAnchor,
                 verticalBand: verticalBand
             )
             isPresented = true
@@ -406,18 +374,14 @@ extension View {
     func hoverTooltip(
         _ text: String,
         shortcut: KeyCombo? = nil,
-        delay: Duration = .seconds(1),
         gap: CGFloat = HoverTooltipController.anchorGap,
-        verticalAnchor: HoverTooltipController.VerticalAnchor = .top,
         verticalBand: CGRect? = nil
     ) -> some View {
         modifier(
             HoverTooltipModifier(
                 text: text,
                 shortcut: shortcut,
-                delay: delay,
                 gap: gap,
-                verticalAnchor: verticalAnchor,
                 verticalBand: verticalBand
             )
         )

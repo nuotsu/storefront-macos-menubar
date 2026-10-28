@@ -81,6 +81,14 @@ struct Store: Identifiable, Codable, Equatable {
         return result
     }
 
+    /// Accent rotation for new stores (Add Store sheet and CSV rows with no Color column).
+    private static let accentPalette = ["1f6f4a", "c07a2c", "3a6ea8", "7a4b8c", "4a7a5c", "a8563a", "5c9fd6", "a37bb8"]
+
+    /// Default accent for the store that will sit at `index` in the list.
+    static func defaultColorHex(forIndex index: Int) -> String {
+        accentPalette[index % accentPalette.count]
+    }
+
     static let domainSuffix = ".myshopify.com"
 
     /// The store "handle" used in admin.shopify.com URLs, i.e. the domain minus ".myshopify.com".
