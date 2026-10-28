@@ -259,15 +259,28 @@ for i in $(seq 1 12); do
   sleep 15
 done
 curl -sSI 'https://storefront.nuotsu.dev/docs' | grep -i '^age\|x-vercel-cache'
+
+# If Docs copy changed: poll for one phrase per approved edit on BOTH pages.
+# Check content, not headers. In v0.0.18 /docs.md served stale copy on a MISS with age 0.
+PHRASES=('Collections (Products)' 'Google Sheets import as is')   # v0.0.18's edits; swap in this release's
+for i in $(seq 1 12); do
+  ok=1
+  for url in https://storefront.nuotsu.dev/docs https://storefront.nuotsu.dev/docs.md; do
+    body=$(curl -sS "$url")
+    for p in "${PHRASES[@]}"; do grep -qF "$p" <<<"$body" || ok=0; done
+  done
+  [ "$ok" = 1 ] && { echo "copy live after try $i"; break; }
+  sleep 15
+done
 ```
 
-### Stale /docs footer: force a redeploy
+### Stale /docs footer or Docs copy: force a redeploy
 
-Expected every release. If `/docs` still shows `vOLD` after polling, the footer HTML is cached at Vercel's edge (`x-vercel-cache: HIT`). Push an empty commit, then poll again (allow up to ~5 minutes for the build):
+Expected every release. If `/docs` still shows `vOLD` after polling, the footer HTML is cached at Vercel's edge (`x-vercel-cache: HIT`). If the approved copy is missing from `/docs` or `/docs.md`, the stale Sanity data is cached behind the render, even on a MISS (v0.0.18). Either way, push an empty commit, then poll again (allow up to ~5 minutes for the build):
 
 ```bash
 git commit --allow-empty -m "Refresh production cache after vX.Y.Z Sanity update." \
-  -m "Vercel's edge cache was still serving the vOLD footer on /docs after the Sanity mutation."
+  -m "<What was stale: the vOLD footer on /docs, and/or the new Docs copy on /docs and /docs.md> after the Sanity mutation."
 git push
 ```
 

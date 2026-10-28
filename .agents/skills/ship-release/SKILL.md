@@ -171,17 +171,19 @@ See [reference.md](reference.md) for fetch/mutate snippets.
 
 - Version script reports no remaining old versions (trust its output; the callout's `Latest: vX.Y.Z` is split across Portable Text spans, so a raw JSON grep for the full string finds nothing)
 - If Docs copy changed: refetch the Docs document and confirm both prose and `markdown.code` reflect the approved text
-- Live: `storefront.nuotsu.dev` footer / docs show `vNEW`, and updated sections appear on `/docs` and `/docs.md`. Poll with a loop (about every 15s for 2 to 3 minutes) rather than one long `sleep`; the harness blocks standalone sleeps.
+- Live: `storefront.nuotsu.dev` footer / docs show `vNEW`, and updated sections appear on `/docs` and `/docs.md`. Poll with a loop (about every 15s for 2 to 3 minutes) rather than one long `sleep`; the harness blocks standalone sleeps. When Docs copy changed, poll for one phrase from each approved edit on both pages, not just `vNEW` (loop in [reference.md](reference.md)).
 
-### 6c — Redeploy when /docs is stale (expected every release)
+### 6c — Redeploy when /docs or the Docs copy is stale (expected every release)
 
 Every release since v0.0.11 has hit this: `/` and `/docs.md` pick up the new version, but `/docs` keeps serving the old footer `<code>vOLD</code>` from Vercel's edge cache (`x-vercel-cache: HIT`, rising `age`). The footer is its own `navigation` document, and changing it does not revalidate `/docs`. Docs page edits can stick too, especially right after a deploy (the post-deploy render gets cached at the edge), so always verify the new wording on `/docs`, not just `/docs.md`.
 
-If `/docs` still contains `vOLD` after about 2 minutes of polling, push an empty commit to force a production redeploy, then poll again (it cleared about 2 minutes after the push in v0.0.17):
+v0.0.18 flipped it: the footer `vNEW` reached `/docs` without a redeploy, but the Docs copy patch (sent about a minute after the version script) stayed stale on **both** `/docs` and `/docs.md`. `/docs.md` kept serving the old text on `x-vercel-cache: MISS` with `age: 0`, so a MISS is not proof of freshness: the page was re-rendered from stale cached Sanity data. Judge freshness by content, never by cache headers.
+
+If `/docs` still contains `vOLD`, or either page is missing the approved wording, after about 2 minutes of polling, push an empty commit to force a production redeploy, then poll again (it cleared about 2 minutes after the push in v0.0.17, and in under a minute in v0.0.18):
 
 ```bash
 git commit --allow-empty -m "Refresh production cache after vX.Y.Z Sanity update." \
-  -m "Vercel's edge cache was still serving the vOLD footer on /docs after the Sanity mutation."
+  -m "<What was stale: the vOLD footer on /docs, and/or the new Docs copy on /docs and /docs.md> after the Sanity mutation."
 git push
 ```
 
