@@ -51,11 +51,23 @@ struct StoreRailView: View {
                             shortcutIndex: index + 1,
                             isSelected: store.id == appState.selectedStoreID,
                             isSuppressed: safeTriangle.suppressedRowID == store.id,
-                            isShopify: chrome.isShopify
-                        ) {
-                            appState.toggleFavorite(store)
+                            isShopify: chrome.isShopify,
+                            canMoveUp: appState.canMoveStore(store, offset: -1),
+                            canMoveDown: appState.canMoveStore(store, offset: 1)
+                        ) { action in
+                            switch action {
+                            case .togglePin: appState.togglePinned(store)
+                            case .moveUp: appState.moveStore(store, offset: -1)
+                            case .moveDown: appState.moveStore(store, offset: 1)
+                            case .hide: appState.setStoreVisible(store, false)
+                            }
                         }
                         .equatable()
+                    }
+                    let hidden = appState.hiddenStores.filter { $0.matchesSearchQuery(appState.query) }
+                    if !hidden.isEmpty {
+                        HiddenStoresSection(stores: hidden, isShopify: chrome.isShopify)
+                            .padding(.top, stores.isEmpty ? 0 : 6)
                     }
                     // Trailing void inside the list — drag only; rows above keep their hits.
                     Color.clear
@@ -263,15 +275,21 @@ private struct LegendLinkRow: View {
     }
 }
 
+private enum StoreRowAction {
+    case togglePin, moveUp, moveDown, hide
+}
+
 private struct StoreRowView: View, Equatable {
     let store: Store
     let shortcutIndex: Int
     let isSelected: Bool
     let isSuppressed: Bool
     let isShopify: Bool
-    let onToggleFavorite: () -> Void
+    let canMoveUp: Bool
+    let canMoveDown: Bool
+    let onAction: (StoreRowAction) -> Void
     @State private var isHovering = false
-    /// Row frame in tooltip space — stars and ←→ share this for a common tooltip Y.
+    /// Row frame in tooltip space — pins and ←→ share this for a common tooltip Y.
     @State private var tooltipRowFrame: CGRect = .zero
 
     static func == (lhs: StoreRowView, rhs: StoreRowView) -> Bool {
@@ -280,73 +298,62 @@ private struct StoreRowView: View, Equatable {
             && lhs.isSelected == rhs.isSelected
             && lhs.isSuppressed == rhs.isSuppressed
             && lhs.isShopify == rhs.isShopify
+            && lhs.canMoveUp == rhs.canMoveUp
+            && lhs.canMoveDown == rhs.canMoveDown
     }
 
     /// Hover state used for visual affordances only — false while the safe triangle is
     /// suppressing this row, so it shows no highlight at all mid-transit.
     private var effectiveHovering: Bool { isHovering && !isSuppressed }
 
-    private var showStar: Bool { store.isFavorite || effectiveHovering || isSelected }
+    private var showPin: Bool { store.isPinned || effectiveHovering || isSelected }
     /// Selected rows always show ←→; others keep `⌘N` through 9.
     private var hasBadge: Bool { isSelected || shortcutIndex <= 9 }
 
-    private static let starWidth: CGFloat = 16
+    private static let pinWidth: CGFloat = 16
     private static let badgeGap: CGFloat = 2
-    private static let edgeGap: CGFloat = 0
     private static let badgeWidth: CGFloat = 18
-    /// Nudges ←→ into the row's trailing padding without moving the star.
+    /// Nudges ←→ into the row's trailing padding without moving the pin.
     private static let selectedBadgeNudge: CGFloat = 3
+    /// Length of the name's fade-out ahead of the trailing controls (or the row edge).
+    private static let fadeWidth: CGFloat = 18
 
-    /// Distance from the row's trailing edge to the star's own right edge — flush
-    /// near the edge when there's no badge, or just past the badge when there is.
-    /// Always uses the `⌘N` slot metrics so selecting a store never shifts the star.
-    private var starTrailingOffset: CGFloat {
-        hasBadge ? Self.badgeWidth + Self.badgeGap : Self.edgeGap
-    }
-
-    /// Always reserve star room so hover/select opacity alone never reflows the name
-    /// (and never re-emits row-frame preferences from a layout shift).
-    private var nameTrailingReserve: CGFloat {
-        hasBadge ? 4 : Self.starWidth + Self.edgeGap
+    /// Width the trailing controls cover at the name's right edge. The name runs the full
+    /// row width underneath them and fades out just before this inset.
+    private var controlsInset: CGFloat {
+        (hasBadge ? Self.badgeWidth + Self.badgeGap : 0) + (showPin ? Self.pinWidth : 0)
     }
 
     var body: some View {
         ZStack(alignment: .trailing) {
             HStack(spacing: 8) {
                 StoreFaviconView(store: store, size: 16)
-                Text(store.displayName)
-                    .font(.panel(12.5, shopify: isShopify))
-                    .foregroundStyle(
-                        isShopify
-                            ? (isSelected ? Theme.Shopify.Sidebar.textPrimary : Theme.Shopify.Sidebar.textItem)
-                            : (isSelected ? Theme.textPrimary : Theme.textBody)
-                    )
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .padding(.trailing, nameTrailingReserve)
-                Spacer(minLength: 4)
-                shortcutBadge
-                    .offset(x: isSelected ? Self.selectedBadgeNudge : 0)
+                nameLabel
             }
 
-            FavoriteButton(
-                isFavorite: store.isFavorite,
-                isRowHovering: effectiveHovering,
-                isShopify: isShopify,
-                verticalBand: tooltipRowFrame,
-                action: onToggleFavorite
-            )
-                .padding(.trailing, starTrailingOffset)
-                .opacity(showStar ? 1 : 0)
-                // Keep the star hittable only while visible — opacity alone still receives taps.
-                .allowsHitTesting(showStar)
+            HStack(spacing: 0) {
+                PinButton(
+                    isPinned: store.isPinned,
+                    isShopify: isShopify,
+                    verticalBand: tooltipRowFrame,
+                    action: { onAction(.togglePin) }
+                )
+                    .opacity(showPin ? 1 : 0)
+                    // Keep the pin hittable only while visible — opacity alone still receives taps.
+                    .allowsHitTesting(showPin)
+                if hasBadge {
+                    shortcutBadge
+                        .offset(x: isSelected ? Self.selectedBadgeNudge : 0)
+                        .padding(.leading, Self.badgeGap)
+                }
+            }
         }
         .padding(.leading, 15)
         .padding(.trailing, 9)
         .padding(.vertical, 7)
         // Accent sits above the selection/hover fill so an opaque selected
         // background can't cover it (stacked `.background` draws behind the prior one).
-        // Clip only the backdrop so favorite tooltips aren't cut off.
+        // Clip only the backdrop so pin tooltips aren't cut off.
         .background {
             ZStack(alignment: .leading) {
                 if isShopify && isSelected {
@@ -379,12 +386,55 @@ private struct StoreRowView: View, Equatable {
         .onHover { hovering in
             // Selection itself is driven centrally by SafeTriangleController, sourced
             // from one continuous mouse-tracking stream — this is only for this row's
-            // own local visual state (its hover fill, the star's fade-in).
+            // own local visual state (its hover fill, the pin's fade-in).
             isHovering = hovering
+        }
+        .contextMenu {
+            Button {
+                onAction(.togglePin)
+            } label: {
+                Label(store.isPinned ? "Unpin" : "Pin", systemImage: store.isPinned ? "pin.slash" : "pin")
+            }
+            Divider()
+            Button {
+                onAction(.moveUp)
+            } label: {
+                Label("Move Up", systemImage: "arrow.up")
+            }
+            .disabled(!canMoveUp)
+            Button {
+                onAction(.moveDown)
+            } label: {
+                Label("Move Down", systemImage: "arrow.down")
+            }
+            .disabled(!canMoveDown)
+            Divider()
+            Button {
+                onAction(.hide)
+            } label: {
+                Label("Hide", systemImage: "eye.slash")
+            }
         }
     }
 
-    /// Selected: static ←→. Unselected (1–9): `⌘N`. Collapses past 9 when not selected.
+    /// Never truncated: the name runs under the trailing controls and fades out ahead of
+    /// them, so hovering (which reveals the pin) only shifts the fade, not the text.
+    private var nameLabel: some View {
+        Text(store.displayName)
+            .font(.panel(12.5, shopify: isShopify))
+            .foregroundStyle(
+                isShopify
+                    ? (isSelected ? Theme.Shopify.Sidebar.textPrimary : Theme.Shopify.Sidebar.textItem)
+                    : (isSelected ? Theme.textPrimary : Theme.textBody)
+            )
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .mask(TrailingFadeMask(fadeWidth: Self.fadeWidth, trailingInset: controlsInset))
+            .animation(.easeOut(duration: 0.12), value: controlsInset)
+    }
+
+    /// Selected: static ←→. Unselected (1–9): `⌘N`.
     private var shortcutBadge: some View {
         Group {
             if isSelected {
@@ -398,7 +448,7 @@ private struct StoreRowView: View, Equatable {
                     "Navigate cards",
                     verticalBand: tooltipRowFrame == .zero ? nil : tooltipRowFrame
                 )
-            } else if shortcutIndex <= 9 {
+            } else {
                 HStack(spacing: 1) {
                     Image(systemName: "command")
                         .font(.panel(8, weight: .medium, shopify: isShopify))
@@ -407,7 +457,7 @@ private struct StoreRowView: View, Equatable {
                 }
             }
         }
-        .frame(width: hasBadge ? Self.badgeWidth : 0, alignment: .trailing)
+        .frame(width: Self.badgeWidth, alignment: .trailing)
         .foregroundStyle(isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta25)
     }
 
@@ -423,32 +473,149 @@ private struct StoreRowView: View, Equatable {
     }
 }
 
-/// Favorite toggle drawn as a fixed-position overlay (see `StoreRowView`) rather than
-/// an `HStack` participant, so its own fade-in/out never nudges any sibling.
-private struct FavoriteButton: View {
-    let isFavorite: Bool
-    let isRowHovering: Bool
+/// Opaque up to `fadeWidth + trailingInset` from the trailing edge, then a linear fade,
+/// then fully clear under the trailing controls. A mask (rather than a gradient painted
+/// in the row's fill) works over every backdrop: glass, opaque, hover, and selected.
+private struct TrailingFadeMask: View {
+    let fadeWidth: CGFloat
+    let trailingInset: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: fadeWidth)
+            Color.clear
+                .frame(width: trailingInset)
+        }
+    }
+}
+
+/// Pin toggle drawn in the row's trailing overlay (see `StoreRowView`), on top of the
+/// name's fade rather than beside it, so its fade-in/out never reflows the name.
+private struct PinButton: View {
+    let isPinned: Bool
     var isShopify: Bool = false
     var verticalBand: CGRect = .zero
     let action: () -> Void
 
     var body: some View {
-        Image(isFavorite ? "StarFilledIcon" : "StarIcon")
+        Image(isPinned ? "PinFilledIcon" : "PinIcon")
             .renderingMode(.template)
             .resizable()
             .scaledToFit()
-            .frame(width: 11, height: 11)
+            .frame(width: 12, height: 12)
             .foregroundStyle(
                 isShopify
-                    ? (isFavorite ? Theme.Shopify.Sidebar.textPrimary : Theme.Shopify.Sidebar.textMeta)
-                    : (isFavorite ? Theme.textPrimary : Theme.textMeta30)
+                    ? (isPinned ? Theme.Shopify.Sidebar.textPrimary : Theme.Shopify.Sidebar.textMeta)
+                    : (isPinned ? Theme.textPrimary : Theme.textMeta30)
             )
             .frame(width: 16, height: 16)
             .contentShape(Rectangle())
             .hoverTooltip(
-                "Toggle favorite",
+                isPinned ? "Unpin" : "Pin",
                 verticalBand: verticalBand == .zero ? nil : verticalBand
             )
             .onTapGesture(perform: action)
+    }
+}
+
+/// Subdued disclosure under the active list: hidden stores stay one click away without
+/// joining hover-select, keyboard navigation, or the `⌘N` shortcuts.
+private struct HiddenStoresSection: View {
+    let stores: [Store]
+    let isShopify: Bool
+    @Environment(AppState.self) private var appState
+    @AppStorage("rail.hiddenStoresExpanded") private var isExpanded = false
+    @State private var isHeaderHovering = false
+
+    private var metaColor: Color {
+        isShopify ? Theme.Shopify.Sidebar.textMeta : Theme.textMeta36
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 5) {
+                    Image("ChevronRightIcon")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 9, height: 9)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    Text("Hidden stores")
+                    Text("\(stores.count)")
+                        .monospacedDigit()
+                    Spacer(minLength: 0)
+                }
+                .font(.panel(10.5, shopify: isShopify))
+                .foregroundStyle(metaColor)
+                .opacity(isHeaderHovering ? 1 : 0.8)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { isHeaderHovering = $0 }
+
+            if isExpanded {
+                ForEach(stores) { store in
+                    HiddenStoreRow(store: store, isShopify: isShopify) {
+                        appState.setStoreVisible(store, true)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct HiddenStoreRow: View {
+    let store: Store
+    let isShopify: Bool
+    let onUnhide: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            HStack(spacing: 8) {
+                StoreFaviconView(store: store, size: 14)
+                    .saturation(0)
+                Text(store.displayName)
+                    .font(.panel(11.5, shopify: isShopify))
+                    .foregroundStyle(isShopify ? Theme.Shopify.Sidebar.textSecondary : Theme.textMeta36)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .mask(TrailingFadeMask(fadeWidth: 18, trailingInset: isHovering ? 16 : 0))
+            }
+            .opacity(isHovering ? 0.9 : 0.6)
+
+            Image(systemName: "eye")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(isShopify ? Theme.Shopify.Sidebar.textPrimary : Theme.textBody)
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
+                .hoverTooltip("Unhide")
+                .onTapGesture(perform: onUnhide)
+                .opacity(isHovering ? 1 : 0)
+                .allowsHitTesting(isHovering)
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 9)
+        .padding(.vertical, 5)
+        .background(
+            (isHovering ? (isShopify ? Theme.Shopify.Sidebar.hoverFill : Theme.hoverFill) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: isShopify ? .circular : .continuous))
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .contextMenu {
+            Button(action: onUnhide) {
+                Label("Unhide", systemImage: "eye")
+            }
+        }
     }
 }

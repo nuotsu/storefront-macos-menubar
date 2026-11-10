@@ -24,13 +24,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Control Center's `NSStatusItem Visible Item-0`…`Item-11` (all set to 0 on this Mac),
     /// which hides the icon as if the user had ⌘-dragged it out of the menu bar.
     private static let statusItemAutosaveName = "com.humanmarketing.storefront.bag"
-    /// Earlier builds gave every starred store its own status item; those defaults keys
+    /// Earlier builds gave every pinned (formerly "favorite") store its own status item; those defaults keys
     /// linger after the switch to a single grouped item.
     private static let legacyFavoriteAutosavePrefix = "com.humanmarketing.storefront.favorite."
     private static let statusItemPreferredPosition: Double = 48
 
     private var statusItem: NSStatusItem?
-    /// Draws the glyph + starred-store favicons inside the one status item, so the whole
+    /// Draws the glyph + pinned-store favicons inside the one status item, so the whole
     /// group ⌘-drags as a unit.
     private var menuBarContentView: MenuBarContentView?
     private var faviconRevisionCancellable: AnyCancellable?
@@ -185,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem?.isVisible = true
         }
 
-        syncMenuBarFavorites()
+        syncMenuBarPinned()
     }
 
     /// Updates the status item glyph from `menuBarIconPreference`.
@@ -268,19 +268,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.statusItem = nil
     }
 
-    // MARK: - Starred store favicons
+    // MARK: - Pinned store favicons
 
-    /// Redraws the grouped favicon strip for visible starred stores.
-    func syncMenuBarFavorites() {
+    /// Redraws the grouped favicon strip for visible pinned stores.
+    func syncMenuBarPinned() {
         guard let content = menuBarContentView, appState.settings.showInMenuBar else { return }
-        let stores = appState.settings.showStarredStoresInMenuBar
-            ? appState.menuBarFavoriteStores
+        let stores = appState.settings.showPinnedStoresInMenuBar
+            ? appState.menuBarPinnedStores
             : []
-        content.favorites = stores.map { store in
-            MenuBarContentView.Favorite(
+        content.pinned = stores.map { store in
+            MenuBarContentView.Pinned(
                 id: store.id,
                 title: store.displayName,
-                image: Self.menuBarFavoriteImage(for: store)
+                image: Self.menuBarPinnedImage(for: store)
             )
         }
         updateStatusItemLength()
@@ -296,12 +296,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.syncMenuBarFavorites()
+                self?.syncMenuBarPinned()
             }
     }
 
     /// Full-color menu-bar mark — cached favicon when available, else initials on the store accent.
-    private static func menuBarFavoriteImage(for store: Store) -> NSImage {
+    private static func menuBarPinnedImage(for store: Store) -> NSImage {
         let dimension: CGFloat = 18
         let size = NSSize(width: dimension, height: dimension)
         let radius = dimension * 0.22
@@ -418,9 +418,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let event = NSApp.currentEvent,
            let content = menuBarContentView {
             let point = sender.convert(event.locationInWindow, from: nil)
-            if let storeID = content.favoriteID(at: point),
+            if let storeID = content.pinnedID(at: point),
                let store = appState.stores.first(where: { $0.id == storeID }),
-               let rect = content.frame(forFavorite: storeID) {
+               let rect = content.frame(forPinned: storeID) {
                 reopenPanel(selecting: store, anchorRect: rect, in: sender)
                 return
             }
@@ -946,11 +946,11 @@ extension AppDelegate: NSPopoverDelegate {
     }
 }
 
-/// Everything the status item shows: the Storefront glyph, then the starred stores'
+/// Everything the status item shows: the Storefront glyph, then the pinned stores'
 /// favicons on a subtle rounded plate. Living inside one `NSStatusItem` is what makes
 /// the whole set ⌘-drag together instead of scattering across the menu bar.
 private final class MenuBarContentView: NSView {
-    struct Favorite {
+    struct Pinned {
         let id: UUID
         let title: String
         let image: NSImage
@@ -974,7 +974,7 @@ private final class MenuBarContentView: NSView {
         didSet { needsDisplay = true }
     }
 
-    var favorites: [Favorite] = [] {
+    var pinned: [Pinned] = [] {
         didSet {
             needsDisplay = true
             updateToolTipTracking()
@@ -991,7 +991,7 @@ private final class MenuBarContentView: NSView {
 
     /// Width the status item must reserve for the glyph plus the favicon plate.
     var totalWidth: CGFloat {
-        guard !favorites.isEmpty else { return Metrics.glyphWidth }
+        guard !pinned.isEmpty else { return Metrics.glyphWidth }
         return Metrics.glyphWidth + Metrics.glyphToGroupGap + groupWidth + Metrics.trailingInset
     }
 
@@ -1000,14 +1000,14 @@ private final class MenuBarContentView: NSView {
     }
 
     private var groupWidth: CGFloat {
-        guard !favorites.isEmpty else { return 0 }
-        let icons = CGFloat(favorites.count) * Metrics.iconSize
-        let gaps = CGFloat(favorites.count - 1) * Metrics.iconSpacing
+        guard !pinned.isEmpty else { return 0 }
+        let icons = CGFloat(pinned.count) * Metrics.iconSize
+        let gaps = CGFloat(pinned.count - 1) * Metrics.iconSpacing
         return icons + gaps + Metrics.groupPadding * 2
     }
 
     private var groupFrame: NSRect? {
-        guard !favorites.isEmpty else { return nil }
+        guard !pinned.isEmpty else { return nil }
         let height = Metrics.iconSize + Metrics.groupPadding * 2
         return NSRect(
             x: Metrics.glyphWidth + Metrics.glyphToGroupGap,
@@ -1030,21 +1030,21 @@ private final class MenuBarContentView: NSView {
     }
 
     /// Store whose favicon (or its share of the plate) contains `point`.
-    func favoriteID(at point: NSPoint) -> UUID? {
+    func pinnedID(at point: NSPoint) -> UUID? {
         guard let groupFrame, groupFrame.contains(point) else { return nil }
-        for index in favorites.indices {
+        for index in pinned.indices {
             guard var frame = iconFrame(at: index) else { continue }
             // Split the inter-icon spacing so the plate has no dead zones.
             frame = frame.insetBy(dx: -Metrics.iconSpacing / 2, dy: 0)
             if frame.minX <= point.x && point.x <= frame.maxX {
-                return favorites[index].id
+                return pinned[index].id
             }
         }
-        return favorites.last?.id
+        return pinned.last?.id
     }
 
-    func frame(forFavorite id: UUID) -> NSRect? {
-        guard let index = favorites.firstIndex(where: { $0.id == id }) else { return nil }
+    func frame(forPinned id: UUID) -> NSRect? {
+        guard let index = pinned.firstIndex(where: { $0.id == id }) else { return nil }
         return iconFrame(at: index)
     }
 
@@ -1074,9 +1074,9 @@ private final class MenuBarContentView: NSView {
             tint.withAlphaComponent(isHighlighted ? 0.22 : 0.12).setFill()
             plate.fill()
 
-            for (index, favorite) in favorites.enumerated() {
+            for (index, item) in pinned.enumerated() {
                 guard let frame = iconFrame(at: index) else { continue }
-                favorite.image.draw(
+                item.image.draw(
                     in: frame,
                     from: .zero,
                     operation: .sourceOver,
@@ -1138,7 +1138,7 @@ private final class MenuBarContentView: NSView {
             removeTrackingArea(trackingArea)
             self.trackingArea = nil
         }
-        guard !favorites.isEmpty else { return }
+        guard !pinned.isEmpty else { return }
         let area = NSTrackingArea(
             rect: bounds,
             options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect],
@@ -1152,8 +1152,8 @@ private final class MenuBarContentView: NSView {
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         let point = convert(event.locationInWindow, from: nil)
-        let title = favoriteID(at: point)
-            .flatMap { id in favorites.first(where: { $0.id == id })?.title }
+        let title = pinnedID(at: point)
+            .flatMap { id in pinned.first(where: { $0.id == id })?.title }
         (superview as? NSButton)?.toolTip = title ?? "Storefront"
     }
 

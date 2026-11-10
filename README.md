@@ -6,7 +6,7 @@ A macOS menu bar app for jumping into any Shopify store’s admin panel. Pick a 
 
 ## Features
 
-- Multi-store rail: search, favorite, and reorder the stores you manage
+- Multi-store rail: search, pin, hide, and reorder the stores you manage
 - Section deep links: Products, Orders, Themes, Settings, and more, with quick actions
 - Appearance, widget background (Liquid Glass or Opaque), and App Icon preferences
 - Section presets: built-in role layouts plus custom presets, with Library CSV import/export

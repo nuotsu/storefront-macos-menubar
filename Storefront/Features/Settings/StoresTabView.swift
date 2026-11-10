@@ -214,16 +214,16 @@ struct StoresTabView: View {
                 Spacer(minLength: 12)
 
                 Button {
-                    appState.toggleFavorite(store)
+                    appState.togglePinned(store)
                 } label: {
-                    Image(store.isFavorite ? "StarFilledIcon" : "StarIcon")
+                    Image(store.isPinned ? "PinFilledIcon" : "PinIcon")
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 13, height: 13)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(store.isFavorite ? Theme.textPrimary : Theme.textMeta40)
+                .foregroundStyle(store.isPinned ? Theme.textPrimary : Theme.textMeta40)
 
                 Button {
                     beginEditing(store)
@@ -264,11 +264,7 @@ struct StoresTabView: View {
     private func visibilityBinding(for store: Store) -> Binding<Bool> {
         Binding(
             get: { store.isVisible },
-            set: { newValue in
-                guard let index = appState.stores.firstIndex(where: { $0.id == store.id }) else { return }
-                appState.stores[index].isVisible = newValue
-                appState.saveStores()
-            }
+            set: { appState.setStoreVisible(store, $0) }
         )
     }
 

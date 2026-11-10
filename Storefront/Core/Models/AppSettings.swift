@@ -279,9 +279,9 @@ struct AppSettings: Codable, Equatable {
     /// attaching to the menu bar icon. Ignored (effectively always on) when the menu
     /// bar icon is hidden.
     var openUnderMouse: Bool = false
-    /// When true, visible starred stores appear as favicons beside the menu bar glyph.
+    /// When true, visible pinned stores appear as favicons beside the menu bar glyph.
     /// No-op when the menu bar icon is hidden.
-    var showStarredStoresInMenuBar: Bool = true
+    var showPinnedStoresInMenuBar: Bool = true
     /// Light / Dark / System — drives panel + Settings appearance.
     /// Ignored by the panel when `widgetThemePreference` is `.shopify` (Polaris is light).
     var appearancePreference: AppearancePreference = .system
@@ -321,6 +321,11 @@ struct AppSettings: Codable, Equatable {
 // Declared in an extension, not the struct body, so Swift still synthesizes the
 // memberwise / no-argument init that `AppSettings()` relies on.
 extension AppSettings {
+    /// Keys from before "favorite/star" was renamed to "pin".
+    private enum LegacyCodingKeys: String, CodingKey {
+        case showStarredStoresInMenuBar
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         sectionOrder = try c.decodeSectionIDsIfPresent(forKey: .sectionOrder) ?? SectionID.defaultOrder
@@ -329,7 +334,10 @@ extension AppSettings {
         showInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showInMenuBar) ?? true
         showInDock = try c.decodeIfPresent(Bool.self, forKey: .showInDock) ?? true
         openUnderMouse = try c.decodeIfPresent(Bool.self, forKey: .openUnderMouse) ?? false
-        showStarredStoresInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showStarredStoresInMenuBar) ?? true
+        let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
+        showPinnedStoresInMenuBar = try c.decodeIfPresent(Bool.self, forKey: .showPinnedStoresInMenuBar)
+            ?? legacy.decodeIfPresent(Bool.self, forKey: .showStarredStoresInMenuBar)
+            ?? true
         appearancePreference = try c.decodeIfPresent(AppearancePreference.self, forKey: .appearancePreference) ?? .system
         appIconPreference = try c.decodeIfPresent(AppIconPreference.self, forKey: .appIconPreference) ?? .system
         menuBarIconPreference = try c.decodeIfPresent(MenuBarIconPreference.self, forKey: .menuBarIconPreference) ?? .store

@@ -102,7 +102,7 @@ final class AppState {
     @ObservationIgnored private let persistence: PersistenceStore
     /// In-flight debounced store write — see `scheduleSaveStores()`.
     @ObservationIgnored private var pendingStoreSave: Task<Void, Never>?
-    /// Cached `visibleStores` result — fingerprint includes visibility / favorite / sort.
+    /// Cached `visibleStores` result — fingerprint includes visibility / pinned / sort.
     @ObservationIgnored private var visibleStoresCache: (fingerprint: Int, stores: [Store])?
 
     init(persistence: PersistenceStore = .shared) {
@@ -185,13 +185,13 @@ final class AppState {
         saveSettings()
     }
 
-    func setShowStarredStoresInMenuBar(_ enabled: Bool) {
-        settings.showStarredStoresInMenuBar = enabled
+    func setShowPinnedStoresInMenuBar(_ enabled: Bool) {
+        settings.showPinnedStoresInMenuBar = enabled
         saveSettings()
-        AppDelegate.shared?.syncMenuBarFavorites()
+        AppDelegate.shared?.syncMenuBarPinned()
     }
 
-    /// Favorited stores first (starring moves a store to the top), each group
+    /// Pinned stores first (pinning moves a store to the top), each group
     /// otherwise in the user's chosen order.
     var visibleStores: [Store] {
         let fingerprint = Self.visibleStoresFingerprint(stores)
@@ -199,7 +199,7 @@ final class AppState {
             return cache.stores
         }
         let value = stores.filter(\.isVisible).sorted { lhs, rhs in
-            if lhs.isFavorite != rhs.isFavorite { return lhs.isFavorite }
+            if lhs.isPinned != rhs.isPinned { return lhs.isPinned }
             return lhs.sortOrder < rhs.sortOrder
         }
         visibleStoresCache = (fingerprint, value)
@@ -211,16 +211,16 @@ final class AppState {
         for store in stores {
             hasher.combine(store.id)
             hasher.combine(store.isVisible)
-            hasher.combine(store.isFavorite)
+            hasher.combine(store.isPinned)
             hasher.combine(store.sortOrder)
         }
         return hasher.finalize()
     }
 
-    /// Visible starred stores in rail order — drives the adjacent menu bar favicons.
-    var menuBarFavoriteStores: [Store] {
+    /// Visible pinned stores in rail order — drives the adjacent menu bar favicons.
+    var menuBarPinnedStores: [Store] {
         stores
-            .filter { $0.isVisible && $0.isFavorite }
+            .filter { $0.isVisible && $0.isPinned }
             .sorted { $0.sortOrder < $1.sortOrder }
     }
 
@@ -423,7 +423,7 @@ final class AppState {
         pendingStoreSave?.cancel()
         pendingStoreSave = nil
         persistence.save(stores: stores)
-        AppDelegate.shared?.syncMenuBarFavorites()
+        AppDelegate.shared?.syncMenuBarPinned()
     }
 
     func saveSettings() {
@@ -442,7 +442,7 @@ final class AppState {
             guard let self else { return }
             self.pendingStoreSave = nil
             self.persistence.save(stores: self.stores)
-            AppDelegate.shared?.syncMenuBarFavorites()
+            AppDelegate.shared?.syncMenuBarPinned()
         }
     }
 
@@ -453,7 +453,7 @@ final class AppState {
         pendingStoreSave?.cancel()
         pendingStoreSave = nil
         persistence.save(stores: stores)
-        AppDelegate.shared?.syncMenuBarFavorites()
+        AppDelegate.shared?.syncMenuBarPinned()
     }
 
     func addStore(domain: String, displayName: String, colorHex: String) {
@@ -666,9 +666,61 @@ final class AppState {
         }
     }
 
-    func toggleFavorite(_ store: Store) {
+    func togglePinned(_ store: Store) {
         guard let index = stores.firstIndex(where: { $0.id == store.id }) else { return }
-        stores[index].isFavorite.toggle()
+        stores[index].isPinned.toggle()
+        saveStores()
+    }
+
+    /// Hidden stores in the user's order — listed under the rail's "Hidden stores" disclosure.
+    var hiddenStores: [Store] {
+        stores.filter { !$0.isVisible }.sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    /// Shows or hides a store in the rail. Hiding the selected store moves the selection
+    /// to its neighbor so the detail column never shows a store the rail doesn't list.
+    func setStoreVisible(_ store: Store, _ visible: Bool) {
+        guard let index = stores.firstIndex(where: { $0.id == store.id }),
+              stores[index].isVisible != visible else { return }
+        if !visible, selectedStoreID == store.id {
+            let rail = visibleStores
+            if let railIndex = rail.firstIndex(where: { $0.id == store.id }) {
+                let neighbor = rail.indices.contains(railIndex + 1) ? rail[railIndex + 1]
+                    : rail.indices.contains(railIndex - 1) ? rail[railIndex - 1] : nil
+                selectedStoreID = neighbor?.id
+            }
+        }
+        stores[index].isVisible = visible
+        if visible, selectedStoreID == nil { selectedStoreID = store.id }
+        saveStores()
+    }
+
+    /// The visible store `offset` rows away within the same pinned / unpinned group, or
+    /// nil at the group's edge — moves never cross the pinned divide.
+    private func railNeighbor(of store: Store, offset: Int) -> Store? {
+        let rail = visibleStores
+        guard let index = rail.firstIndex(where: { $0.id == store.id }),
+              rail.indices.contains(index + offset) else { return nil }
+        let neighbor = rail[index + offset]
+        return neighbor.isPinned == store.isPinned ? neighbor : nil
+    }
+
+    func canMoveStore(_ store: Store, offset: Int) -> Bool {
+        railNeighbor(of: store, offset: offset) != nil
+    }
+
+    /// Swaps a store with its rail neighbor (`offset` -1 = up, +1 = down).
+    func moveStore(_ store: Store, offset: Int) {
+        guard let neighbor = railNeighbor(of: store, offset: offset) else { return }
+        // Normalize first so duplicate sortOrders (old imports) can't make the swap a no-op.
+        for (order, id) in stores.sorted(by: { $0.sortOrder < $1.sortOrder }).map(\.id).enumerated() {
+            if let i = stores.firstIndex(where: { $0.id == id }) { stores[i].sortOrder = order }
+        }
+        guard let a = stores.firstIndex(where: { $0.id == store.id }),
+              let b = stores.firstIndex(where: { $0.id == neighbor.id }) else { return }
+        let order = stores[a].sortOrder
+        stores[a].sortOrder = stores[b].sortOrder
+        stores[b].sortOrder = order
         saveStores()
     }
 

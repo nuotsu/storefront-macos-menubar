@@ -52,12 +52,12 @@ struct GeneralTabView: View {
 
                     SettingsGroupedDivider()
 
-                    SettingsGroupedRow("Favorited stores in menu bar") {
+                    SettingsGroupedRow("Pinned stores in menu bar") {
                         Toggle(
                             "",
                             isOn: Binding(
-                                get: { appState.settings.showStarredStoresInMenuBar },
-                                set: { appState.setShowStarredStoresInMenuBar($0) }
+                                get: { appState.settings.showPinnedStoresInMenuBar },
+                                set: { appState.setShowPinnedStoresInMenuBar($0) }
                             )
                         )
                         .labelsHidden()

@@ -78,7 +78,7 @@ enum SettingsSearchIndex {
         // General
         hit("general.login", "Launch at login", "General", .general, ["startup", "login item"]),
         hit("general.menubar", "Show in menu bar", "General", .general, ["status item", "menu bar"]),
-        hit("general.starredMenuBar", "Favorited stores in menu bar", "General", .general, ["favorite", "star", "favicon", "status item", "menu bar"]),
+        hit("general.pinnedMenuBar", "Pinned stores in menu bar", "General", .general, ["pin", "pinned", "favorite", "star", "favicon", "status item", "menu bar"]),
         hit("general.openUnderMouse", "Open under mouse", "General", .general, ["pointer", "cursor", "floating", "popover", "menu bar icon"]),
         hit("general.dock", "Show in Dock", "General", .general, ["dock icon", "activation"]),
 

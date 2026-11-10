@@ -9,7 +9,14 @@ struct Store: Identifiable, Codable, Equatable {
     var colorHex: String
     var isVisible: Bool
     var sortOrder: Int
-    var isFavorite: Bool
+    var isPinned: Bool
+
+    /// `isPinned` keeps its pre-rename "isFavorite" key so existing stores.json files
+    /// (and older builds reading newer ones) keep their pins.
+    private enum CodingKeys: String, CodingKey {
+        case id, accountID, myshopifyDomain, displayName, colorHex, isVisible, sortOrder
+        case isPinned = "isFavorite"
+    }
 
     init(
         id: UUID = UUID(),
@@ -19,7 +26,7 @@ struct Store: Identifiable, Codable, Equatable {
         colorHex: String,
         isVisible: Bool = true,
         sortOrder: Int = 0,
-        isFavorite: Bool = false
+        isPinned: Bool = false
     ) {
         self.id = id
         self.accountID = accountID
@@ -28,7 +35,7 @@ struct Store: Identifiable, Codable, Equatable {
         self.colorHex = colorHex
         self.isVisible = isVisible
         self.sortOrder = sortOrder
-        self.isFavorite = isFavorite
+        self.isPinned = isPinned
     }
 
     var color: Color {
