@@ -59,7 +59,7 @@ targets:
         CFBundleDisplayName: Storefront
         CFBundleIconFile: AppIcon
         CFBundleIconName: AppIcon
-        CFBundleShortVersionString: "0.1.0"
+        CFBundleShortVersionString: "0.0.19"
         CFBundleVersion: "19"
         NSHumanReadableCopyright: "Copyright © 2026 Human Marketing."
         SUFeedURL: "https://github.com/nuotsu/storefront-macos-menubar/releases/latest/download/appcast.xml"
