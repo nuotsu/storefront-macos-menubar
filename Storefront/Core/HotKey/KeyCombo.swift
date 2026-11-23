@@ -160,6 +160,19 @@ struct KeyCombo: Codable, Equatable {
         return KeyCombo(keyCode: keyCode, modifierFlags: mods)
     }
 
+    /// Whether an AppKit key event matches this combo — for `NSView`s that take key
+    /// events before SwiftUI's `.onKeyPress` can see them.
+    func matches(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, UInt32(event.keyCode) == keyCode else { return false }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        var mods: UInt32 = 0
+        if flags.contains(.command) { mods |= UInt32(cmdKey) }
+        if flags.contains(.option) { mods |= UInt32(optionKey) }
+        if flags.contains(.control) { mods |= UInt32(controlKey) }
+        if flags.contains(.shift) { mods |= UInt32(shiftKey) }
+        return mods == modifierFlags
+    }
+
     /// Whether a SwiftUI key press matches this combo (panel-local shortcut handling).
     func matches(_ keyPress: KeyPress) -> Bool {
         guard let code = Self.keyCode(for: keyPress.key), UInt32(code) == keyCode else { return false }

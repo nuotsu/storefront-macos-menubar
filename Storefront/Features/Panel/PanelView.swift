@@ -6,7 +6,11 @@ struct PanelView: View {
     @State private var safeTriangle = SafeTriangleController()
     @State private var hoverTooltips = HoverTooltipController()
     @FocusState private var searchFocused: Bool
-    @FocusState private var focusedRowSearchID: String?
+    /// Row whose inline search field holds AppKit first responder. Plain state, not
+    /// `@FocusState`: the field is a raw `NSTextView`, and SwiftUI focus kept resetting
+    /// this to nil behind it (bouncing focus to the rail search). The field reports its
+    /// real focus changes back through the binding.
+    @State private var focusedRowSearchID: String?
     /// Non-text focus target so shortcuts keep working after the search field is blurred
     /// (e.g. after ⌘1–9), without the text field swallowing ⌘A / ⌘O.
     @FocusState private var panelFocused: Bool
@@ -80,7 +84,7 @@ struct PanelView: View {
                     StoreDetailView(
                         store: store,
                         focusedRowSearchID: $focusedRowSearchID,
-                        onToggleLinkSearchKey: { performToggleLinkSearch() }
+                        onToggleLinkSearchKey: { rowID in collapseLinkSearch(fromFieldRowID: rowID) }
                     )
                 } else {
                     emptyState
@@ -208,8 +212,8 @@ struct PanelView: View {
         }
     }
 
-    /// Shared by panel `onKeyPress` and the row-search `TextField` (which can swallow ⌃S
-    /// before it bubbles). Returns whether the shortcut was applicable.
+    /// Panel `onKeyPress` path for ⌃S (⌃S typed inside a row field goes through
+    /// `collapseLinkSearch(fromFieldRowID:)`). Returns whether the shortcut was applicable.
     ///
     /// Cycle: collapsed → expand+focus; expanded but unfocused → focus only;
     /// expanded and focused → collapse.
@@ -236,18 +240,33 @@ struct PanelView: View {
             suppressRailSearchRefocus = false
             focusLinkSearchField(result.rowID, selectAll: true)
         } else {
-            // Keep suppress up until panel focus has re-attached on the next turn —
-            // clearing it in the same async flush as `moveKeyboardFocusToPanel` can let
-            // `onChange(focusedRowSearchID)` bounce focus onto the rail search.
-            suppressRailSearchRefocus = true
-            moveKeyboardFocusToPanel()
-            DispatchQueue.main.async {
-                DispatchQueue.main.async {
-                    suppressRailSearchRefocus = false
-                }
-            }
+            parkFocusAfterLinkSearchCollapse()
         }
         return true
+    }
+
+    /// ⌃S typed inside a row's search field: the field is focused by definition, so close
+    /// it (no focus-first step). Uses the field's own row, not whichever row is highlighted.
+    private func collapseLinkSearch(fromFieldRowID rowID: String) -> Bool {
+        guard let store = appState.selectedStore,
+              appState.expandedSearchRowIDs[store.id]?.contains(rowID) == true else { return false }
+        appState.expandedSearchRowIDs[store.id]?.remove(rowID)
+        parkFocusAfterLinkSearchCollapse()
+        return true
+    }
+
+    /// Collapse leaves no text field — park on the panel so arrows and shortcuts keep working.
+    private func parkFocusAfterLinkSearchCollapse() {
+        // Keep suppress up until panel focus has re-attached on the next turn —
+        // clearing it in the same async flush as `moveKeyboardFocusToPanel` can let
+        // `onChange(focusedRowSearchID)` bounce focus onto the rail search.
+        suppressRailSearchRefocus = true
+        moveKeyboardFocusToPanel()
+        DispatchQueue.main.async {
+            DispatchQueue.main.async {
+                suppressRailSearchRefocus = false
+            }
+        }
     }
 
     /// Puts the caret in the expanded row search — sync + next-turn so the field exists

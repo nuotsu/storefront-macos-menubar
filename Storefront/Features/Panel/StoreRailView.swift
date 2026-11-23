@@ -539,15 +539,15 @@ private struct HiddenStoresSection: View {
                 withAnimation(.easeOut(duration: 0.15)) { isExpanded.toggle() }
             } label: {
                 HStack(spacing: 5) {
+                    Text("Hidden stores")
+                    Text("(\(stores.count))")
+                        .monospacedDigit()
                     Image("ChevronRightIcon")
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 9, height: 9)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    Text("Hidden stores")
-                    Text("\(stores.count)")
-                        .monospacedDigit()
                     Spacer(minLength: 0)
                 }
                 .font(.panel(10.5, shopify: isShopify))

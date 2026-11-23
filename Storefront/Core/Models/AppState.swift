@@ -244,6 +244,47 @@ final class AppState {
         settings.sectionOrder.filter { settings.enabledSections.contains($0) }
     }
 
+    /// Disabled sections in display order — listed under the card grid's "Hidden cards"
+    /// disclosure so they can be brought back without opening Settings.
+    var hiddenSections: [SectionID] {
+        settings.sectionOrder.filter { !settings.enabledSections.contains($0) }
+    }
+
+    /// Swaps a visible card with its previous (`-1`) or next (`+1`) visible neighbor.
+    /// Hidden sections keep their slots in `sectionOrder`, so unhiding one later puts it
+    /// back roughly where it was.
+    func moveSection(_ section: SectionID, offset: Int) {
+        let visible = enabledSections
+        guard let index = visible.firstIndex(of: section),
+              visible.indices.contains(index + offset),
+              let from = settings.sectionOrder.firstIndex(of: section),
+              let to = settings.sectionOrder.firstIndex(of: visible[index + offset]) else { return }
+        settings.sectionOrder.swapAt(from, to)
+        if focusArea == .cards, focusedSectionIndex == index {
+            focusedSectionIndex = index + offset
+        }
+        saveSettings()
+    }
+
+    /// Hides or unhides a card in the panel (the same switch as Settings → Sections).
+    func setSectionEnabled(_ section: SectionID, _ enabled: Bool) {
+        guard settings.enabledSections.contains(section) != enabled else { return }
+        if enabled {
+            settings.enabledSections.insert(section)
+        } else {
+            settings.enabledSections.remove(section)
+        }
+        let count = enabledSections.count
+        if count == 0 {
+            focusArea = .rail
+            focusedSectionIndex = 0
+        } else if focusedSectionIndex >= count {
+            focusedSectionIndex = count - 1
+        }
+        focusedRowIndex = 0
+        saveSettings()
+    }
+
     func select(_ store: Store) {
         selectedStoreID = store.id
     }

@@ -17,13 +17,34 @@ func openStoreLink(_ url: URL, keepOpen: Bool? = nil) {
     }
 }
 
+extension View {
+    /// Right-click "Copy URL" for anything that opens a link. No menu when `url` is nil.
+    @ViewBuilder
+    func copyURLContextMenu(_ url: URL?) -> some View {
+        if let url {
+            contextMenu {
+                Button {
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    pasteboard.setString(url.absoluteString, forType: .string)
+                } label: {
+                    Label("Copy URL", systemImage: "link")
+                }
+            }
+        } else {
+            self
+        }
+    }
+}
+
 struct StoreDetailView: View {
     @Environment(AppState.self) private var appState
     let store: Store
-    var focusedRowSearchID: FocusState<String?>.Binding
+    var focusedRowSearchID: Binding<String?>
     /// Invoked when ⌃S is pressed while a row search field holds focus (TextField can
     /// swallow the chord before `PanelView.onKeyPress` sees it).
-    var onToggleLinkSearchKey: () -> Bool = { false }
+    /// Called with the row id when ⌃S is pressed inside that row's search field.
+    var onToggleLinkSearchKey: (String) -> Bool = { _ in false }
     @Environment(\.colorScheme) private var colorScheme
 
     var enabledSections: [SectionID] { appState.enabledSections }
@@ -65,31 +86,44 @@ struct StoreDetailView: View {
         // Shopify: solid Polaris-style header band — no blur/transparency.
         ScrollViewReader { scrollProxy in
             ScrollView {
-                Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-                    ForEach(sectionRows(for: sections)) { row in
-                        GridRow {
-                            ForEach(row.slots) { slot in
-                                let isFocused = slot.index == focusedSectionIndex
-                                SectionCardView(
-                                    section: slot.section,
-                                    store: store,
-                                    isFocused: isFocused,
-                                    // Only the focused card cares about the row index —
-                                    // pinning the rest to -1 keeps an arrow-key row move
-                                    // from changing a parameter on every other card.
-                                    focusedRowIndex: isFocused ? appState.focusedRowIndex : -1,
-                                    focusedRowSearchID: focusedRowSearchID,
-                                    onToggleLinkSearchKey: onToggleLinkSearchKey
-                                )
-                                // The binding and closure above defeat SwiftUI's own field
-                                // diff, so without this every focus move re-ran all cards.
-                                .equatable()
-                                .id(slot.section)
-                            }
-                            if row.slots.count == 1 {
-                                Color.clear
+                VStack(alignment: .leading, spacing: 10) {
+                    Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                        ForEach(sectionRows(for: sections)) { row in
+                            GridRow {
+                                ForEach(row.slots) { slot in
+                                    let isFocused = slot.index == focusedSectionIndex
+                                    SectionCardView(
+                                        section: slot.section,
+                                        store: store,
+                                        isFocused: isFocused,
+                                        // Only the focused card cares about the row index —
+                                        // pinning the rest to -1 keeps an arrow-key row move
+                                        // from changing a parameter on every other card.
+                                        focusedRowIndex: isFocused ? appState.focusedRowIndex : -1,
+                                        focusedRowSearchID: focusedRowSearchID,
+                                        onToggleLinkSearchKey: onToggleLinkSearchKey
+                                    )
+                                    // The binding and closure above defeat SwiftUI's own field
+                                    // diff, so without this every focus move re-ran all cards.
+                                    .equatable()
+                                    .id(slot.section)
+                                    .contextMenu {
+                                        SectionCardContextMenu(
+                                            section: slot.section,
+                                            index: slot.index,
+                                            count: sections.count
+                                        )
+                                    }
+                                }
+                                if row.slots.count == 1 {
+                                    Color.clear
+                                }
                             }
                         }
+                    }
+                    let hidden = appState.hiddenSections
+                    if !hidden.isEmpty {
+                        HiddenSectionsDisclosure(sections: hidden, isShopify: chrome.isShopify)
                     }
                 }
                 .padding(12)
@@ -157,6 +191,7 @@ struct StoreDetailView: View {
                     ) {
                         openStoreLink(adminURL)
                     }
+                    .copyURLContextMenu(adminURL)
                 }
                 if let shopURL = store.shopURL {
                     HeaderActionButton(
@@ -168,6 +203,7 @@ struct StoreDetailView: View {
                     ) {
                         openStoreLink(shopURL)
                     }
+                    .copyURLContextMenu(shopURL)
                 }
                 if let supportURL = store.supportURL {
                     HeaderActionButton(
@@ -179,6 +215,7 @@ struct StoreDetailView: View {
                     ) {
                         openStoreLink(supportURL)
                     }
+                    .copyURLContextMenu(supportURL)
                 }
             }
             .padding(.top, 10)
@@ -657,8 +694,9 @@ struct SectionCardView: View, Equatable {
     let store: Store
     var isFocused: Bool = false
     var focusedRowIndex: Int = 0
-    var focusedRowSearchID: FocusState<String?>.Binding
-    var onToggleLinkSearchKey: () -> Bool = { false }
+    var focusedRowSearchID: Binding<String?>
+    /// Called with the row id when ⌃S is pressed inside that row's search field.
+    var onToggleLinkSearchKey: (String) -> Bool = { _ in false }
     @Environment(AppState.self) private var appState
 
     /// The focus binding and ⌃S closure point at the same panel state for the panel's
@@ -761,8 +799,9 @@ private struct CardLinkRow: View, Equatable {
     /// Sole active highlight for this store's card grid — driven by `AppState` so hover,
     /// click, and arrow keys share one selection (hover/click override arrows).
     var isActive: Bool = false
-    var focusedRowSearchID: FocusState<String?>.Binding
-    var onToggleLinkSearchKey: () -> Bool = { false }
+    var focusedRowSearchID: Binding<String?>
+    /// Called with the row id when ⌃S is pressed inside that row's search field.
+    var onToggleLinkSearchKey: (String) -> Bool = { _ in false }
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     /// True while the pointer is inside this row — used to activate after hover is
@@ -837,6 +876,7 @@ private struct CardLinkRow: View, Equatable {
                     becomeActive()
                     openLink()
                 }
+                .copyURLContextMenu(row.url(for: store.myshopifyDomain))
 
                 // Its own tight-spacing group — the outer HStack's spacing (6) only applies
                 // between the link zone and this whole cluster, not within it.
@@ -889,6 +929,7 @@ private struct CardLinkRow: View, Equatable {
                             shortcut: appState.settings.openCreateLinkHotkey,
                             gap: 1
                         )
+                        .copyURLContextMenu(row.createURL(for: store.myshopifyDomain))
                     }
                     if let shortcutKey = row.shortcutKey {
                         ShortcutKeyLabel(String(shortcutKey))
@@ -929,22 +970,24 @@ private struct CardLinkRow: View, Equatable {
                         onSubmit: submitSearch,
                         selectAllGeneration: appState.linkSearchSelectAllRowID == row.id
                             ? appState.linkSearchSelectAllGeneration
-                            : 0
-                    )
-                        .focused(focusedRowSearchID, equals: row.id)
-                        .focusEffectDisabled()
-                        .onExitCommand {
+                            : 0,
+                        isFocused: focusedRowSearchID.wrappedValue == row.id,
+                        toggleCombo: appState.settings.toggleLinkSearchHotkey,
+                        onToggleKey: { onToggleLinkSearchKey(row.id) },
+                        onCancel: {
                             appState.expandedSearchRowIDs[store.id]?.remove(row.id)
                             if focusedRowSearchID.wrappedValue == row.id {
                                 focusedRowSearchID.wrappedValue = nil
                             }
-                        }
-                        .onKeyPress { keyPress in
-                            if appState.settings.toggleLinkSearchHotkey.matches(keyPress) {
-                                return onToggleLinkSearchKey() ? .handled : .ignored
+                        },
+                        onFocusChange: { focused in
+                            if focused {
+                                focusedRowSearchID.wrappedValue = row.id
+                            } else if focusedRowSearchID.wrappedValue == row.id {
+                                focusedRowSearchID.wrappedValue = nil
                             }
-                            return .ignored
                         }
+                    )
                 }
                 .padding(.horizontal, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -992,7 +1035,7 @@ private struct CardLinkRow: View, Equatable {
         guard let url = row.searchURL(for: store.myshopifyDomain, query: searchQuery.wrappedValue) else { return }
         openStoreLink(url)
         // `openStoreLink` hands focus to the browser, which can leave this row's
-        // `@FocusState` binding stuck non-nil (the window resigning key status doesn't
+        // focus binding stuck non-nil (the window resigning key status doesn't
         // reliably clear it) — that would otherwise permanently block the global
         // keyboard-nav guard in `PanelView`. Release it explicitly rather than relying
         // on SwiftUI to notice the field lost real focus.
@@ -1058,5 +1101,135 @@ private struct PointingHandCursorModifier: ViewModifier {
 extension View {
     func pointingHandCursor() -> some View {
         modifier(PointingHandCursorModifier())
+    }
+}
+
+/// Right-click menu on a section card: reorder within the visible grid, or hide it.
+/// Writes the same `sectionOrder` / `enabledSections` that Settings → Sections edits.
+private struct SectionCardContextMenu: View {
+    let section: SectionID
+    let index: Int
+    let count: Int
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.15)) { appState.moveSection(section, offset: -1) }
+        } label: {
+            Label("Move Up", systemImage: "arrow.up")
+        }
+        .disabled(index == 0)
+
+        Button {
+            withAnimation(.easeOut(duration: 0.15)) { appState.moveSection(section, offset: 1) }
+        } label: {
+            Label("Move Down", systemImage: "arrow.down")
+        }
+        .disabled(index >= count - 1)
+
+        Divider()
+
+        Button {
+            withAnimation(.easeOut(duration: 0.15)) { appState.setSectionEnabled(section, false) }
+        } label: {
+            Label("Hide", systemImage: "eye.slash")
+        }
+    }
+}
+
+/// Subdued disclosure under the card grid: hidden cards stay one click away from
+/// coming back, mirroring the rail's "Hidden stores" section.
+private struct HiddenSectionsDisclosure: View {
+    let sections: [SectionID]
+    let isShopify: Bool
+    @Environment(AppState.self) private var appState
+    @AppStorage("detail.hiddenSectionsExpanded") private var isExpanded = false
+    @State private var isHeaderHovering = false
+
+    private var metaColor: Color {
+        isShopify ? Theme.Shopify.textMeta : Theme.textMeta36
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeOut(duration: 0.15)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 5) {
+                    Text("Hidden cards")
+                    Text("(\(sections.count))")
+                        .monospacedDigit()
+                    Image("ChevronRightIcon")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 9, height: 9)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    Spacer(minLength: 0)
+                }
+                .font(.panel(10.5, shopify: isShopify))
+                .foregroundStyle(metaColor)
+                .opacity(isHeaderHovering ? 1 : 0.8)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { isHeaderHovering = $0 }
+
+            if isExpanded {
+                ForEach(sections, id: \.self) { section in
+                    HiddenSectionRow(section: section, isShopify: isShopify) {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            appState.setSectionEnabled(section, true)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct HiddenSectionRow: View {
+    let section: SectionID
+    let isShopify: Bool
+    let onUnhide: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(section.iconName)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 13, height: 13)
+            Text(section.title)
+                .font(.panel(11.5, shopify: isShopify))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            Image(systemName: "eye")
+                .font(.system(size: 10, weight: .medium))
+                .frame(width: 16, height: 16)
+                .opacity(isHovering ? 1 : 0)
+        }
+        .foregroundStyle(isShopify ? Theme.Shopify.textSecondary : Theme.textSecondary)
+        .opacity(isHovering ? 1 : 0.75)
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .padding(.vertical, 5)
+        .background(
+            (isHovering ? (isShopify ? Theme.Shopify.rowHighlightFill : Theme.hoverFill) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .onTapGesture(perform: onUnhide)
+        .hoverTooltip("Show card")
+        .contextMenu {
+            Button(action: onUnhide) {
+                Label("Unhide", systemImage: "eye")
+            }
+        }
     }
 }

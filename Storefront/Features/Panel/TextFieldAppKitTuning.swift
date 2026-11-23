@@ -130,6 +130,20 @@ struct CaretTintedTextField: NSViewRepresentable {
     /// Bumped (non-zero) to select the entire contents once the field can take focus —
     /// used after ⌃S so leftover query text is replace-ready.
     var selectAllGeneration: UInt = 0
+    /// Whether the caller wants this field focused. Don't use SwiftUI `.focused(...)` here:
+    /// it doesn't make a raw `NSViewRepresentable` first responder and resets its binding
+    /// behind AppKit's back. The view claims focus itself, reports real changes through
+    /// `onFocusChange`, and resigns on teardown in `viewWillMove(toWindow:)`.
+    var isFocused: Bool = false
+    /// Shortcut the text view hands back instead of typing (the ⌃S search toggle). The
+    /// field is AppKit first responder, so SwiftUI `.onKeyPress` never sees the chord.
+    var toggleCombo: KeyCombo? = nil
+    var onToggleKey: () -> Bool = { false }
+    /// Escape. Handled here because SwiftUI's `.onExitCommand` needs SwiftUI focus.
+    var onCancel: () -> Void = {}
+    /// Reports real AppKit focus gains/losses (click in, click away, teardown) so the
+    /// caller's focus state follows the text view instead of guessing.
+    var onFocusChange: (Bool) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -139,6 +153,15 @@ struct CaretTintedTextField: NSViewRepresentable {
         let view = CaretTintedNSTextView(fontSize: fontSize)
         view.delegate = context.coordinator
         view.caretColor = caretColor
+        let coordinator = context.coordinator
+        view.interceptKeyDown = { event in
+            guard let combo = coordinator.parent.toggleCombo, combo.matches(event) else { return false }
+            return coordinator.parent.onToggleKey()
+        }
+        view.onFirstResponderChange = { focused in
+            // Next turn: these fire mid-`makeFirstResponder`, often during a view update.
+            DispatchQueue.main.async { coordinator.parent.onFocusChange(focused) }
+        }
         view.string = text
         return view
     }
@@ -146,17 +169,25 @@ struct CaretTintedTextField: NSViewRepresentable {
     func updateNSView(_ nsView: CaretTintedNSTextView, context: Context) {
         context.coordinator.parent = self
         nsView.caretColor = caretColor
+        nsView.wantsFocus = isFocused
         if nsView.string != text {
             nsView.string = text
+        }
+        if isFocused {
+            // Next turn: on expand the view may not be in a window yet.
+            let coordinator = context.coordinator
+            DispatchQueue.main.async {
+                guard coordinator.parent.isFocused,
+                      let window = nsView.window, window.firstResponder !== nsView else { return }
+                window.makeFirstResponder(nsView)
+            }
         }
         if selectAllGeneration != 0,
            selectAllGeneration != context.coordinator.lastSelectAllGeneration
         {
             context.coordinator.lastSelectAllGeneration = selectAllGeneration
-            // Don't call makeFirstResponder here — that bypasses SwiftUI `@FocusState` and
-            // leaves AppKit focus stranded after the field is torn down (⌃S collapse),
-            // which silently kills panel `.onKeyPress` (arrows included). Selection is
-            // applied after FocusState has already focused this view.
+            // Focus comes from `isFocused` above (the caller's focus state); this only
+            // selects, queued after that first-responder hop.
             DispatchQueue.main.async {
                 guard !nsView.string.isEmpty else { return }
                 nsView.selectAll(nil)
@@ -184,6 +215,10 @@ struct CaretTintedTextField: NSViewRepresentable {
                 parent.onSubmit()
                 return true
             }
+            if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+                parent.onCancel()
+                return true
+            }
             return false
         }
     }
@@ -197,6 +232,30 @@ final class CaretTintedNSTextView: NSTextView {
     var caretColor: NSColor {
         get { insertionPointColor }
         set { insertionPointColor = newValue }
+    }
+
+    /// Return true to swallow a key event before the text system handles it.
+    var interceptKeyDown: ((NSEvent) -> Bool)?
+    var onFirstResponderChange: ((Bool) -> Void)?
+    /// Set from `isFocused`; claimed once the view lands in a window (on expand the
+    /// first `updateNSView` runs before the view has one).
+    var wantsFocus = false
+
+    override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        if accepted { onFirstResponderChange?(true) }
+        return accepted
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let accepted = super.resignFirstResponder()
+        if accepted { onFirstResponderChange?(false) }
+        return accepted
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if interceptKeyDown?(event) == true { return }
+        super.keyDown(with: event)
     }
 
     init(fontSize: CGFloat) {
@@ -241,6 +300,13 @@ final class CaretTintedNSTextView: NSTextView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         syncLayoutMetrics()
+        if wantsFocus, let window {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.wantsFocus, self.window === window,
+                      window.firstResponder !== self else { return }
+                window.makeFirstResponder(self)
+            }
+        }
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
