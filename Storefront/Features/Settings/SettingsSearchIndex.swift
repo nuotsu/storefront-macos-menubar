@@ -33,6 +33,8 @@ enum SettingsSearchIndex {
 
         // Stores
         hit("stores.add", "Add Store", "Stores", .stores, ["new store", "create", "add store", "+"]),
+        hit("stores.syncShopify", "Sync from Shopify", "Stores", .stores, ["shopify cli", "sync", "import", "organization", "partner", "collaborator", "sign in", "login"]),
+        hit("stores.filter", "Filter stores", "Stores", .stores, ["search", "shown", "hidden", "new"]),
         hit("stores.importExport", "Import & Export", "Stores", .stores, ["csv", "import", "export", "backup"]),
         hit("stores.import", "Import CSV", "Stores", .stores, ["csv", "import"]),
         hit("stores.export", "Export CSV", "Stores", .stores, ["csv", "export"]),
@@ -90,7 +92,7 @@ enum SettingsSearchIndex {
         hit("appearance.menuBarIcon", "Menu bar icon", "Appearance", .appearance, ["cart", "store", "shopify", "status item", "menu bar", "outline", "filled"]),
 
         // How to use
-        hit("howto.addStores", "Add your stores", "How to use", .howToUse, ["add store", "myshopify", "import csv"]),
+        hit("howto.addStores", "Add your stores", "How to use", .howToUse, ["add store", "myshopify", "import csv", "sync", "shopify cli"]),
         hit("howto.customizeCards", "Customize your cards", "How to use", .howToUse, ["sections", "presets", "reorder"]),
         hit("howto.navigate", "Navigate the panel", "How to use", .howToUse, ["keyboard", "arrows", "hotkey", "menu bar"]),
 

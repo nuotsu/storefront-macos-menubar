@@ -67,9 +67,10 @@ targets:
         SUEnableAutomaticChecks: true
         SUScheduledCheckInterval: 86400
         ATSApplicationFontsPath: Fonts
+    # No App Sandbox: "Sync from Shopify" runs the person's own Shopify CLI (a Node
+    # script under their home folder), which a sandboxed app can't launch. Storefront ships
+    # outside the Mac App Store, so nothing requires the sandbox. Data from sandboxed
+    # builds is copied out of the container on first launch (SandboxMigration.swift).
     entitlements:
       path: Storefront/Resources/Storefront.entitlements
-      properties:
-        com.apple.security.app-sandbox: true
-        com.apple.security.files.user-selected.read-write: true
-        com.apple.security.network.client: true
+      properties: {}

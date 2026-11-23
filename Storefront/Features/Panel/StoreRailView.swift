@@ -429,7 +429,10 @@ private struct StoreRowView: View, Equatable {
             )
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // `minWidth: 0` pins the frame to the rail's width. Without it the frame
+            // grows to fit a long name and pushes the whole rail wider; with it the
+            // extra text runs past the frame and the mask clips and fades it.
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             .mask(TrailingFadeMask(fadeWidth: Self.fadeWidth, trailingInset: controlsInset))
             .animation(.easeOut(duration: 0.12), value: controlsInset)
     }
@@ -588,7 +591,8 @@ private struct HiddenStoreRow: View {
                     .foregroundStyle(isShopify ? Theme.Shopify.Sidebar.textSecondary : Theme.textMeta36)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // See `StoreRowView.nameLabel`: keeps long names from widening the rail.
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                     .mask(TrailingFadeMask(fadeWidth: 18, trailingInset: isHovering ? 16 : 0))
             }
             .opacity(isHovering ? 0.9 : 0.6)

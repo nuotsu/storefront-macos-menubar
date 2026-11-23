@@ -98,6 +98,9 @@ final class AppState {
     /// select-all after a ⌃S focus so leftover query text is replace-ready.
     var linkSearchSelectAllRowID: String?
     var linkSearchSelectAllGeneration: UInt = 0
+    /// Where Settings → Stores' "Sync from Shopify" stands. See `AppState+ShopifySync.swift`.
+    var shopifySyncStatus: ShopifySyncStatus = .idle
+    var lastShopifySync: ShopifySyncRecord? = ShopifySyncRecord.load()
 
     @ObservationIgnored private let persistence: PersistenceStore
     /// In-flight debounced store write — see `scheduleSaveStores()`.
@@ -106,6 +109,7 @@ final class AppState {
     @ObservationIgnored private var visibleStoresCache: (fingerprint: Int, stores: [Store])?
 
     init(persistence: PersistenceStore = .shared) {
+        SandboxMigration.runIfNeeded()
         self.persistence = persistence
         let loaded = persistence.loadStores()
         self.stores = loaded
@@ -505,12 +509,12 @@ final class AppState {
 
     /// Appends without saving or fetching, so a CSV import can do both once for the batch
     /// instead of rewriting stores.json and starting an unchunked favicon fetch per row.
-    private func appendStore(domain: String, displayName: String, colorHex: String) -> Store {
+    func appendStore(domain: String, displayName: String, colorHex: String, isVisible: Bool = true) -> Store {
         let accountID = stores.first?.accountID ?? UUID()
         let nextOrder = (stores.map(\.sortOrder).max() ?? -1) + 1
-        let store = Store(accountID: accountID, myshopifyDomain: domain, displayName: displayName, colorHex: colorHex, sortOrder: nextOrder)
+        let store = Store(accountID: accountID, myshopifyDomain: domain, displayName: displayName, colorHex: colorHex, isVisible: isVisible, sortOrder: nextOrder)
         stores.append(store)
-        if selectedStoreID == nil { selectedStoreID = store.id }
+        if selectedStoreID == nil, isVisible { selectedStoreID = store.id }
         return store
     }
 
@@ -533,7 +537,7 @@ final class AppState {
         await FaviconStore.shared.fetch(stores: stores, force: true)
     }
 
-    private func fetchFavicons(for stores: [Store], force: Bool = false) {
+    func fetchFavicons(for stores: [Store], force: Bool = false) {
         Task {
             await FaviconStore.shared.fetch(stores: stores, force: force)
         }

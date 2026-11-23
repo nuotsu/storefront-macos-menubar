@@ -16,6 +16,17 @@ struct StoresTabView: View {
     @State private var isRefreshingFavicons = false
     @State private var faviconRefreshMessage: String?
 
+    @State private var filter: StoreFilter = .all
+    @State private var searchText = ""
+
+    /// Which slice of the list the pane shows. `.new` only appears after a sync added stores.
+    private enum StoreFilter: Hashable {
+        case all
+        case shown
+        case hidden
+        case new
+    }
+
     var orderedStores: [Store] {
         appState.stores.sorted { $0.sortOrder < $1.sortOrder }
     }
@@ -31,23 +42,23 @@ struct StoresTabView: View {
             // Sorted once per body — `orderedStores` re-sorts on every access, and the
             // row loop below reads it for each row's drop delegate and last-row check.
             let ordered = orderedStores
+            // The drop delegate gets the full order, not just the listed rows, so dragging
+            // inside a filtered list lands next to the target in the real order.
             let orderedIDs = ordered.map(\.id)
+            let newIDs = appState.recentlySyncedStoreIDs
+            let listed = ordered.filter { matches($0, newIDs: newIDs) }
 
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Drag rows to reorder. Hidden stores stay out of the panel.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textSecondary)
-                    Spacer(minLength: 8)
-                    Button(allVisible ? "Hide All" : "Show All", action: toggleAllVisibility)
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
+                shopifySyncCard
+
+                if !ordered.isEmpty {
+                    listToolbar(ordered: ordered, newIDs: newIDs)
+                    listCaption(listed: listed, total: ordered.count)
                 }
 
                 VStack(spacing: 0) {
-                    ForEach(ordered) { store in
-                        storeRow(store: store, isLast: store.id == ordered.last?.id)
+                    ForEach(listed) { store in
+                        storeRow(store: store, isNew: newIDs.contains(store.id), isLast: store.id == listed.last?.id)
                             .onDrag {
                                 draggingStoreID = store.id
                                 return NSItemProvider(object: store.id.uuidString as NSString)
@@ -68,9 +79,11 @@ struct StoresTabView: View {
                             )
                     }
 
-                    if !ordered.isEmpty {
-                        SettingsGroupedDivider(leadingInset: SettingsRowMetrics.afterReorderSeparatorLeading)
+                    if listed.isEmpty {
+                        emptyListRow(hasStores: !ordered.isEmpty)
                     }
+
+                    SettingsGroupedDivider(leadingInset: listed.isEmpty ? SettingsRowMetrics.separatorLeading : SettingsRowMetrics.afterReorderSeparatorLeading)
 
                     HStack(spacing: 14) {
                         Button(action: beginAdding) {
@@ -88,6 +101,7 @@ struct StoresTabView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .help("Add a store by its myshopify.com domain")
 
                         Spacer(minLength: 0)
 
@@ -143,6 +157,19 @@ struct StoresTabView: View {
         }
         .settingsTopScrollEdgeBlur()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onChange(of: appState.recentlySyncedStoreIDs.isEmpty) { _, isEmpty in
+            if isEmpty, filter == .new { filter = .all }
+        }
+        // Coming back from Terminal (sign-in) or the browser (install guide): try again
+        // without making the person find the button.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            switch appState.shopifySyncStatus {
+            case .needsSignIn, .notInstalled:
+                appState.syncShopifyStores()
+            default:
+                break
+            }
+        }
         .sheet(isPresented: $isAddingStore) {
             storeSheet(title: "Add a store", confirmTitle: "Add", store: nil, domain: $newDomain, displayName: $newDisplayName, colorBinding: newColorBinding) {
                 addStore()
@@ -179,19 +206,303 @@ struct StoresTabView: View {
         }
     }
 
-    private var allVisible: Bool {
-        appState.stores.allSatisfy(\.isVisible)
+    // MARK: - Shopify sync
+
+    private var shopifySyncCard: some View {
+        SettingsGroupedCard {
+            HStack(alignment: .center, spacing: 12) {
+                Image("ShopifyIcon")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 18, height: 18)
+                    .foregroundStyle(Theme.textPrimary)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Sync from Shopify")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text(syncSubtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                syncPrimaryAction
+            }
+            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+            .padding(.vertical, 10)
+
+            syncNotice
+        }
     }
 
-    private func toggleAllVisibility() {
-        let newValue = !allVisible
-        for index in appState.stores.indices {
-            appState.stores[index].isVisible = newValue
+    private var syncSubtitle: String {
+        if appState.isSyncingShopify {
+            return "Checking your Shopify organizations…"
+        }
+        guard let record = appState.lastShopifySync else {
+            return "Adds every store your Shopify organizations can reach. You can still hide and reorder them."
+        }
+        let when = record.date.formatted(.relative(presentation: .named))
+        let stores = record.storeCount == 1 ? "1 store" : "\(record.storeCount) stores"
+        guard !record.organizationNames.isEmpty else {
+            return "Last synced \(when) · \(stores)"
+        }
+        return "Last synced \(when) · \(stores) in \(record.organizationNames.formatted(.list(type: .and)))"
+    }
+
+    @ViewBuilder
+    private var syncPrimaryAction: some View {
+        switch appState.shopifySyncStatus {
+        case .syncing:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Syncing…")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        case .needsSignIn:
+            Button("Sign In…", action: signInToShopify)
+                .controlSize(.small)
+        case .notInstalled:
+            Button("Install Guide") { NSWorkspace.shared.open(ShopifyCLI.installGuideURL) }
+                .controlSize(.small)
+        default:
+            Button("Sync Now") { appState.syncShopifyStores() }
+                .controlSize(.small)
+        }
+    }
+
+    @ViewBuilder
+    private var syncNotice: some View {
+        switch appState.shopifySyncStatus {
+        case .synced(let summary):
+            let addedCount = appState.recentlySyncedStoreIDs.count
+            let hiddenCount = appState.stores.filter { appState.recentlySyncedStoreIDs.contains($0.id) && !$0.isVisible }.count
+            noticeRow(
+                symbol: "checkmark.circle.fill",
+                tint: .green,
+                message: syncResultMessage(added: addedCount, hidden: hiddenCount, matched: summary.matchedCount)
+            ) {
+                if addedCount > 0 {
+                    SettingsTextLink("Review") {
+                        searchText = ""
+                        filter = .new
+                    }
+                }
+                SettingsTextLink("Done") { appState.dismissShopifySyncSummary() }
+            }
+        case .needsSignIn:
+            noticeRow(
+                symbol: "person.crop.circle.badge.exclamationmark",
+                tint: .orange,
+                message: "Storefront reads your stores through the Shopify CLI, which isn't signed in. Sign in from Terminal, then come back here and Storefront syncs on its own."
+            ) {
+                SettingsTextLink("Try Again") { appState.syncShopifyStores() }
+            }
+        case .notInstalled:
+            noticeRow(
+                symbol: "terminal",
+                tint: .orange,
+                message: "Storefront reads your stores through the Shopify CLI. Install it with `npm install -g @shopify/cli@latest` (or Homebrew), then sync again."
+            ) {
+                SettingsTextLink("Try Again") { appState.syncShopifyStores() }
+            }
+        case .failed(let message):
+            noticeRow(
+                symbol: "exclamationmark.triangle.fill",
+                tint: .orange,
+                message: "Sync didn't finish: \(message)"
+            ) {
+                SettingsTextLink("Try Again") { appState.syncShopifyStores() }
+            }
+        case .idle, .syncing:
+            EmptyView()
+        }
+    }
+
+    private func syncResultMessage(added: Int, hidden: Int, matched: Int) -> String {
+        guard added > 0 else {
+            return matched == 0
+                ? "Shopify didn't list any stores for this account."
+                : "You're up to date. All \(matched) stores from Shopify are already here."
+        }
+        let addedText = added == 1 ? "Added 1 store" : "Added \(added) stores"
+        switch hidden {
+        case 0: return "\(addedText) to your panel."
+        case added: return "\(addedText). They start hidden, so turn on the ones you want in the panel."
+        default: return "\(addedText). \(hidden) of them are hidden until you turn them on."
+        }
+    }
+
+    private func noticeRow<Actions: View>(
+        symbol: String,
+        tint: Color,
+        message: String,
+        @ViewBuilder actions: () -> Actions
+    ) -> some View {
+        VStack(spacing: 0) {
+            SettingsGroupedDivider()
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12))
+                    .foregroundStyle(tint)
+                Text(Self.inlineMarkdown(message))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textPrimary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 12) {
+                    actions()
+                }
+            }
+            .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+            .padding(.vertical, 9)
+        }
+    }
+
+    private static func inlineMarkdown(_ string: String) -> AttributedString {
+        (try? AttributedString(
+            markdown: string,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(string)
+    }
+
+    private func signInToShopify() {
+        Task {
+            do {
+                try await ShopifyCLI.openSignInInTerminal()
+            } catch ShopifyCLI.Failure.notInstalled {
+                appState.shopifySyncStatus = .notInstalled
+            } catch {
+                appState.shopifySyncStatus = .failed("Couldn't open Terminal: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: - Filtering
+
+    private func matches(_ store: Store, newIDs: Set<Store.ID>) -> Bool {
+        switch filter {
+        case .all: break
+        case .shown: guard store.isVisible else { return false }
+        case .hidden: guard !store.isVisible else { return false }
+        case .new: guard newIDs.isEmpty || newIDs.contains(store.id) else { return false }
+        }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        return store.matchesSearchQuery(query) || store.myshopifyDomain.localizedCaseInsensitiveContains(query)
+    }
+
+    private var isFiltering: Bool {
+        filter != .all || !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private func listToolbar(ordered: [Store], newIDs: Set<Store.ID>) -> some View {
+        let shownCount = ordered.filter(\.isVisible).count
+        return HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.textMeta40)
+                TextField("Filter by name or domain", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textMeta40)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear filter")
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background(Theme.settingsCardFill)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .strokeBorder(Theme.borderColor, lineWidth: 1)
+            )
+            .frame(maxWidth: .infinity)
+
+            Picker("Show", selection: $filter) {
+                Text("All \(ordered.count)").tag(StoreFilter.all)
+                Text("Shown \(shownCount)").tag(StoreFilter.shown)
+                Text("Hidden \(ordered.count - shownCount)").tag(StoreFilter.hidden)
+                if !newIDs.isEmpty {
+                    Text("New \(newIDs.count)").tag(StoreFilter.new)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+        }
+    }
+
+    private func listCaption(listed: [Store], total: Int) -> some View {
+        let allListedVisible = listed.allSatisfy(\.isVisible)
+        let actionTitle: String = {
+            let verb = allListedVisible ? "Hide" : "Show"
+            return isFiltering ? "\(verb) \(listed.count)" : "\(verb) All"
+        }()
+        return HStack {
+            Text(isFiltering
+                 ? "Showing \(listed.count) of \(total) stores. Drag to reorder."
+                 : "Drag rows to reorder. Hidden stores stay out of the panel.")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer(minLength: 8)
+            if !listed.isEmpty {
+                Button(actionTitle) { setVisibility(!allListedVisible, for: listed) }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+            }
+        }
+    }
+
+    private func emptyListRow(hasStores: Bool) -> some View {
+        HStack(spacing: 8) {
+            Text(hasStores
+                 ? "No stores match."
+                 : "No stores yet. Sync from Shopify above, or add one by its domain.")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer(minLength: 8)
+            if hasStores {
+                SettingsTextLink("Clear Filter") {
+                    searchText = ""
+                    filter = .all
+                }
+            }
+        }
+        .padding(.horizontal, SettingsRowMetrics.horizontalPadding)
+        .padding(.vertical, 12)
+    }
+
+    /// One save for the whole batch. Hiding the selected store hands the selection to the
+    /// first visible one, the same as hiding it from its row.
+    private func setVisibility(_ visible: Bool, for listed: [Store]) {
+        let ids = Set(listed.map(\.id))
+        for index in appState.stores.indices where ids.contains(appState.stores[index].id) {
+            appState.stores[index].isVisible = visible
+        }
+        if appState.selectedStore.map({ !$0.isVisible }) ?? true {
+            appState.selectedStoreID = appState.visibleStores.first?.id
         }
         appState.saveStores()
     }
 
-    private func storeRow(store: Store, isLast: Bool) -> some View {
+    private func storeRow(store: Store, isNew: Bool, isLast: Bool) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: Column.spacing) {
                 Image(systemName: "line.3.horizontal")
@@ -209,7 +520,18 @@ struct StoresTabView: View {
                 Text(store.displayName)
                     .font(.system(size: 12.5))
                     .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
                     .opacity(store.isVisible ? 1 : 0.5)
+                    .help(store.myshopifyDomain)
+
+                if isNew {
+                    Text("New")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1.5)
+                        .background(Color.accentColor.opacity(0.14), in: Capsule())
+                }
 
                 Spacer(minLength: 12)
 

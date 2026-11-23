@@ -7,11 +7,21 @@ A macOS menu bar app for jumping into any Shopify store’s admin panel. Pick a 
 ## Features
 
 - Multi-store rail: search, pin, hide, and reorder the stores you manage
+- Sync from Shopify: bring in every store your Shopify organizations can reach (dev, client transfer, and collaborator stores) through the Shopify CLI
 - Section deep links: Products, Orders, Themes, Settings, and more, with quick actions
 - Appearance, widget background (Liquid Glass or Opaque), and App Icon preferences
 - Section presets: built-in role layouts plus custom presets, with Library CSV import/export
 - Global hotkey and full keyboard navigation (editable in Settings → Keybindings)
 - CSV import/export for stores and section presets
+
+### Sync from Shopify
+
+Settings → Stores → **Sync Now** adds every store your Shopify organizations can reach. Storefront reads them through the [Shopify CLI](https://shopify.dev/docs/api/shopify-cli) (`npm install -g @shopify/cli@latest`), signed in with your own Shopify account, so there's no separate login or API key.
+
+- Stores already in your list keep their name, color, visibility, order, and pin.
+- New stores arrive hidden (unless your list was empty), so turn on the ones you want. The **New** filter lists them.
+- Nothing is ever removed, so stores you added by hand stay put.
+- Stores where you're staff directly, outside an organization, don't show up in the CLI. Add those by domain or CSV.
 
 ### CSV import and export
 

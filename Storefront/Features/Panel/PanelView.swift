@@ -399,7 +399,7 @@ struct PanelView: View {
         return VStack(spacing: 8) {
             Text("No stores yet")
                 .font(.panel(13, weight: .semibold, shopify: shopify))
-            Text("Add a store from Settings to get started.")
+            Text("Sync from Shopify or add a store in Settings to get started.")
                 .font(.panel(11.5, shopify: shopify))
                 .foregroundStyle(shopify ? Theme.Shopify.textSecondary : Theme.textSecondary)
         }

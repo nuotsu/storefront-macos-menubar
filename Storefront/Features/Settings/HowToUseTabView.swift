@@ -27,7 +27,7 @@ struct HowToUseTabView: View {
             Step(
                 id: 1,
                 title: "Add your stores",
-                body: "From Settings (⌘,), open Stores and add each shop by its myshopify.com domain. Rename, recolor, hide, reorder, or import a CSV anytime.",
+                body: "From Settings (⌘,), open Stores and click Sync from Shopify to bring in every store your Shopify organizations can reach, or add a shop by its myshopify.com domain. Rename, recolor, hide, reorder, or import a CSV anytime.",
                 actionTitle: "Open Stores",
                 actionTab: .stores
             ),
