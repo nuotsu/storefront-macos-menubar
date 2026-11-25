@@ -82,6 +82,8 @@ enum Theme {
         static let rowHighlightBorder = Color(hex: "ebebeb")
         static let textSecondary = Color(hex: "616161")
         static let textMeta = Color(hex: "8a8a8a")
+        /// Live-theme status dot from Shopify's theme card.
+        static let liveThemeStatus = Color(hex: "c8f79b")
         /// Copy-confirmation checkmark. Polaris `color-icon-success`.
         static let iconSuccess = Color(hex: "29845a")
         /// Dark admin nav column (new Shopify admin) — fixed, independent of appearance.

@@ -129,10 +129,10 @@ enum ActiveSectionPreset: Hashable, Identifiable {
     }
 }
 
-struct LinkRow: Identifiable {
+struct LinkRow: Identifiable, Equatable {
     /// A "New X" action attached to a row and rendered as a trailing "New +" button,
     /// rather than as its own separate row.
-    struct CreateAction {
+    struct CreateAction: Equatable {
         let path: String
         /// Singular noun for the create tooltip (e.g. "Product" for a Products row).
         let noun: String
@@ -159,6 +159,8 @@ struct LinkRow: Identifiable {
     var searchQueryParamName: String = "query"
     /// Bare lowercase letter that opens this row from the panel (no modifiers).
     var shortcutKey: Character? = nil
+    /// Fetched live-theme row, with a status dot and compact nested layout.
+    var isLiveTheme = false
 
     func url(for domain: String) -> URL? {
         if let absoluteURL { return URL(string: absoluteURL) }

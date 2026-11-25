@@ -299,7 +299,7 @@ struct StoresTabView: View {
             noticeRow(
                 symbol: "person.crop.circle.badge.exclamationmark",
                 tint: .orange,
-                message: "Storefront reads your stores through the Shopify CLI, which isn't signed in. Sign in from Terminal, then come back here and Storefront syncs on its own."
+                message: "Shopify needs you to sign in again. Click Sign In to open Terminal. If your account is already listed, choose ‘Log in with a different account’ and sign in with the same account to renew the session. Return here to sync automatically."
             ) {
                 SettingsTextLink("Try Again") { appState.syncShopifyStores() }
             }

@@ -101,6 +101,16 @@ final class AppState {
     /// Where Settings → Stores' "Sync from Shopify" stands. See `AppState+ShopifySync.swift`.
     var shopifySyncStatus: ShopifySyncStatus = .idle
     var lastShopifySync: ShopifySyncRecord? = ShopifySyncRecord.load()
+    /// Session cache keyed by domain so a response can never land on another store.
+    @ObservationIgnored var shopifyThemes: [String: ShopifyThemeState] = [:]
+    /// Drains `shopifyThemeQueue` one store at a time. It can outlive the panel so
+    /// reopening reuses its results.
+    @ObservationIgnored var shopifyThemePreloadTask: Task<Void, Never>?
+    /// Stores waiting for a live-theme fetch, next first. Hovering or selecting a store
+    /// moves it to the front.
+    @ObservationIgnored var shopifyThemeQueue: [Store] = []
+    /// Live themes from earlier sessions, shown until a fresh fetch replaces them.
+    @ObservationIgnored var cachedLiveThemes: [String: CachedLiveTheme] = [:]
 
     @ObservationIgnored private let persistence: PersistenceStore
     /// In-flight debounced store write — see `scheduleSaveStores()`.
@@ -115,6 +125,7 @@ final class AppState {
         self.stores = loaded
         self.selectedStoreID = loaded.first(where: { $0.isVisible })?.id ?? loaded.first?.id
         self.settings = persistence.loadSettings()
+        self.cachedLiveThemes = persistence.loadLiveThemes()
         reconcileLaunchAtLogin()
         AppearancePreference.apply(settings.appearancePreference)
     }
@@ -291,6 +302,7 @@ final class AppState {
 
     func select(_ store: Store) {
         selectedStoreID = store.id
+        prioritizeShopifyTheme(for: store)
     }
 
     // MARK: - Keyboard navigation
@@ -334,7 +346,7 @@ final class AppState {
         if fromHover && !cardLinkHoverArmed { return }
         let sections = enabledSections
         guard let sectionIndex = sections.firstIndex(of: section) else { return }
-        let rows = StaticLinkCatalog.rows(for: section)
+        let rows = linkRows(for: section, store: selectedStore)
         guard rowIndex >= 0, rowIndex < rows.count else { return }
         focusArea = .cards
         focusedSectionIndex = sectionIndex
@@ -358,7 +370,7 @@ final class AppState {
     func moveRowFocus(offset: Int) {
         let sections = enabledSections
         guard focusedSectionIndex < sections.count else { return }
-        let rowCount = StaticLinkCatalog.rows(for: sections[focusedSectionIndex]).count
+        let rowCount = linkRows(for: sections[focusedSectionIndex], store: selectedStore).count
         guard rowCount > 0 else { return }
         focusedRowIndex = ((focusedRowIndex + offset) % rowCount + rowCount) % rowCount
     }
@@ -382,7 +394,7 @@ final class AppState {
     private var focusedRow: LinkRow? {
         let sections = enabledSections
         guard focusArea == .cards, focusedSectionIndex < sections.count else { return nil }
-        let rows = StaticLinkCatalog.rows(for: sections[focusedSectionIndex])
+        let rows = linkRows(for: sections[focusedSectionIndex], store: selectedStore)
         guard focusedRowIndex < rows.count else { return nil }
         return rows[focusedRowIndex]
     }
@@ -407,7 +419,8 @@ final class AppState {
         guard let store = selectedStore,
               let match = StaticLinkCatalog.row(forShortcut: key, in: enabledSections),
               let url = match.row.url(for: store.myshopifyDomain) else { return false }
-        focusCardLink(section: match.section, rowIndex: match.rowIndex)
+        let rowIndex = linkRows(for: match.section, store: store).firstIndex { $0.id == match.row.id } ?? match.rowIndex
+        focusCardLink(section: match.section, rowIndex: rowIndex)
         openStoreLink(url, keepOpen: false)
         return true
     }
@@ -493,6 +506,11 @@ final class AppState {
 
     /// Writes anything still in flight. Must be called before the app can go away, or a
     /// debounced change made in the last 300 ms is lost.
+    /// A few KB at most, written once per fetched store.
+    func saveLiveThemes() {
+        persistence.save(liveThemes: cachedLiveThemes)
+    }
+
     func flushPendingSaves() {
         guard pendingStoreSave != nil else { return }
         pendingStoreSave?.cancel()

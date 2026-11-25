@@ -709,10 +709,12 @@ struct SectionCardView: View, Equatable {
             && lhs.focusedRowIndex == rhs.focusedRowIndex
     }
 
-    private var rows: [LinkRow] { StaticLinkCatalog.rows(for: section) }
+    private var rows: [LinkRow] { appState.linkRows(for: section, store: store) }
     private var chrome: WidgetChrome { WidgetChrome.current(settings: appState.settings) }
 
     var body: some View {
+        let rows = self.rows
+        let themeState = section == .themes ? appState.themeState(for: store) : nil
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Text(chrome.isShopify ? section.title : section.title.uppercased())
@@ -725,6 +727,25 @@ struct SectionCardView: View, Equatable {
                     .foregroundStyle(chrome.isShopify ? Theme.Shopify.textStrong : Theme.textMeta40)
                     .lineLimit(1)
                 Spacer(minLength: 4)
+                if let themeState {
+                    Button {
+                        Task {
+                            if themeState.needsSignIn {
+                                await appState.signInForShopifyTheme(for: store)
+                            } else {
+                                await appState.loadShopifyThemes(for: store, force: true)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: themeState.needsSignIn ? "person.crop.circle" : "arrow.clockwise")
+                            .font(.system(size: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(chrome.isShopify ? Theme.Shopify.textMeta : Theme.textMeta40)
+                    .disabled(themeState.isLoading)
+                    .help(themeState.message ?? "Refresh themes")
+                    .accessibilityLabel(themeState.needsSignIn ? "Sign in for live theme access" : "Refresh themes")
+                }
                 if isFocused {
                     HStack(spacing: 0) {
                         Image(systemName: "arrow.up")
@@ -741,17 +762,12 @@ struct SectionCardView: View, Equatable {
 
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    CardLinkRow(
-                        row: row,
-                        store: store,
-                        section: section,
-                        rowIndex: index,
-                        isActive: isFocused && index == focusedRowIndex,
-                        focusedRowSearchID: focusedRowSearchID,
-                        onToggleLinkSearchKey: onToggleLinkSearchKey
-                    )
-                    // A row move only changes `isActive` on two rows; skip the rest.
-                    .equatable()
+                    if !row.isLiveTheme {
+                        cardLink(row, at: index)
+                        if row.id == "themes.library", let themeState {
+                            themeList(state: themeState, rowIndex: index + 1)
+                        }
+                    }
                 }
             }
             // Grid equalizes card height across a GridRow's two columns (see the comment
@@ -786,9 +802,92 @@ struct SectionCardView: View, Equatable {
             macOSShadowY: 1
         )
     }
+
+    private func cardLink(_ row: LinkRow, at index: Int) -> some View {
+        CardLinkRow(
+            row: row,
+            store: store,
+            section: section,
+            rowIndex: index,
+            isActive: isFocused && index == focusedRowIndex,
+            focusedRowSearchID: focusedRowSearchID,
+            onToggleLinkSearchKey: onToggleLinkSearchKey
+        )
+        // Keep indices from the full list so keyboard navigation matches the UI.
+        .equatable()
+    }
+
+    private func themeList(state: ShopifyThemeState, rowIndex: Int) -> some View {
+        let isLoading = state.isLoading || state.lastAttempt == nil
+        return Group {
+            if let row = state.liveRow {
+                cardLink(row, at: rowIndex)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                HStack(spacing: 5) {
+                    if isLoading {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .accessibilityLabel("Loading live theme")
+                    }
+                    Group {
+                        if state.needsSignIn {
+                            Button("Sign in to load live theme") {
+                                Task { await appState.signInForShopifyTheme(for: store) }
+                            }
+                            .buttonStyle(.plain)
+                            .pointingHandCursor()
+                        } else {
+                            Text(state.message == nil ? (isLoading ? "Loading live theme…" : "No live theme") : "Couldn't load live theme")
+                        }
+                    }
+                        .font(.panel(10, shopify: chrome.isShopify))
+                        .foregroundStyle(chrome.isShopify ? Theme.Shopify.textMeta : Theme.textMeta40)
+                        .lineLimit(1)
+                        .help(state.message ?? (isLoading ? "Loading live theme" : "No live theme"))
+                }
+                .padding(.horizontal, 6)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        // Keep one slot stable while loading, empty, or failed.
+        .frame(height: themeLinkRowHeight)
+        .padding(.leading, 16)
+        .overlay(alignment: .leading) {
+            ThemeBranchConnector()
+                .stroke(
+                    chrome.isShopify ? Theme.Shopify.hairline : Theme.divider,
+                    style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round)
+                )
+                .frame(width: 8)
+                .padding(.leading, 12)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
 }
 
-/// A single static link within a section card. Fixed padding at all times — only the
+private let themeLinkRowHeight: CGFloat = 24
+
+/// Descends from the library link and bends toward the center of the live-theme row.
+private struct ThemeBranchConnector: Shape {
+    func path(in rect: CGRect) -> Path {
+        let x = rect.minX + 0.5
+        let y = rect.midY
+        let radius: CGFloat = 6
+        var path = Path()
+        path.move(to: CGPoint(x: x, y: rect.minY))
+        path.addLine(to: CGPoint(x: x, y: y - radius))
+        path.addQuadCurve(
+            to: CGPoint(x: x + radius, y: y),
+            control: CGPoint(x: x, y: y)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: y))
+        return path
+    }
+}
+
+/// A single link within a section card. Fixed padding at all times — only the
 /// background fill toggles on hover — so hovering never shifts the row's size
 /// or its neighbors' positions.
 private struct CardLinkRow: View, Equatable {
@@ -809,10 +908,9 @@ private struct CardLinkRow: View, Equatable {
     /// stationary cursor).
     @State private var pointerInside = false
 
-    /// Same reasoning as `SectionCardView.==`. Rows come from the static catalog, so
-    /// the id stands in for the whole `LinkRow`.
+    /// Include fetched names and statuses so a rename or publication updates the row.
     static func == (lhs: CardLinkRow, rhs: CardLinkRow) -> Bool {
-        lhs.row.id == rhs.row.id
+        lhs.row == rhs.row
             && lhs.store == rhs.store
             && lhs.section == rhs.section
             && lhs.rowIndex == rhs.rowIndex
@@ -847,24 +945,43 @@ private struct CardLinkRow: View, Equatable {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 6) {
-                HStack(alignment: .center, spacing: 6) {
-                    Image(row.iconName)
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 14, height: 14)
-                        .foregroundStyle(
-                            isShopify
-                                ? Theme.Shopify.textStrong
-                                : (isActive ? Theme.textBody : Theme.textMeta40)
-                        )
+            HStack(alignment: .center, spacing: !row.isLiveTheme ? 6 : 0) {
+                HStack(alignment: .center, spacing: !row.isLiveTheme ? 6 : 3) {
+                    if row.isLiveTheme {
+                        if appState.themeState(for: store).isLoading {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .frame(width: 14, height: 14)
+                                .accessibilityLabel("Refreshing live theme")
+                        } else {
+                            Circle()
+                                .fill(Theme.Shopify.liveThemeStatus)
+                                .frame(width: 8, height: 8)
+                                .frame(width: 14, height: 14)
+                                .help("Live theme")
+                                .accessibilityLabel("Live theme")
+                        }
+                    } else {
+                        Image(row.iconName)
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 14, height: 14)
+                            .foregroundStyle(
+                                isShopify
+                                    ? Theme.Shopify.textStrong
+                                    : (isActive ? Theme.textBody : Theme.textMeta40)
+                            )
+                    }
                     Text(row.title)
                         .font(.panel(12, shopify: isShopify))
                         .foregroundStyle(labelColor)
+                        .lineLimit(!row.isLiveTheme ? nil : 1)
+                        .help(row.title)
                     Spacer(minLength: 4)
                 }
                 .padding(.vertical, 3)
+                .frame(height: !row.isLiveTheme ? nil : themeLinkRowHeight)
                 // Scoped to just the link's own zone — the "+"/search buttons sit outside
                 // this contentShape entirely (as separate HStack siblings below), so clicking
                 // between/around them can never fall through and register as opening the link.

@@ -538,6 +538,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Rail focus + keyboard parking before each open (hosting views are reused).
     private func preparePanelForShow() {
         appState.exitToRail()
+        appState.preloadShopifyThemes()
         NotificationCenter.default.post(name: .panelWillShow, object: nil)
     }
 

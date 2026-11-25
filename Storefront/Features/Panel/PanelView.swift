@@ -147,6 +147,13 @@ struct PanelView: View {
             // Hosting controller is reused across opens — onAppear won't fire again.
             resetPanelInteractionToRail()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // One recovery observer per panel, rather than one per section card.
+            if let store = appState.selectedStore, appState.enabledSections.contains(.themes),
+               appState.themeState(for: store).needsSignIn {
+                Task { await appState.loadShopifyThemes(for: store, force: true) }
+            }
+        }
         .onChange(of: appState.selectedStoreID) { _, newValue in
             safeTriangle.updateSelectedRowID(newValue)
             // Only steal focus when a TextField would swallow panel shortcuts —

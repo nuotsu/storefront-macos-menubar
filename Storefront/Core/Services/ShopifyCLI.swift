@@ -32,6 +32,25 @@ enum ShopifyCLI {
         let stores: [RemoteStore]
     }
 
+    struct RemoteTheme: Codable, Sendable, Equatable, Identifiable {
+        let id: String
+        let name: String
+        let role: String
+
+        var isLive: Bool { role == "live" }
+    }
+
+    /// Metadata only — no theme files are downloaded and no browser login is opened.
+    static func fetchLiveTheme(for domain: String) async throws -> RemoteTheme? {
+        let environment = try await resolveEnvironment()
+        let envelope = try await runJSON(
+            environment,
+            ["theme", "list", "--store", domain, "--role", "live", "--json", "--no-input"],
+            as: ThemesEnvelope.self
+        )
+        return envelope.themes.first(where: \.isLive)
+    }
+
     enum Failure: Error, Equatable {
         /// No `shopify` executable on the login shell's PATH.
         case notInstalled
@@ -66,26 +85,16 @@ enum ShopifyCLI {
         var collected: [RemoteStore] = []
         var lastFailure: Error?
         var succeeded = 0
-        await withTaskGroup(of: Result<[RemoteStore], Error>.self) { group in
-            for arguments in requests {
-                group.addTask {
-                    do {
-                        let envelope = try await runJSON(environment, arguments, as: StoresEnvelope.self)
-                        return .success(envelope.stores)
-                    } catch {
-                        return .failure(error)
-                    }
-                }
-            }
-            for await result in group {
-                switch result {
-                case .success(let stores):
-                    succeeded += 1
-                    collected.append(contentsOf: stores)
-                case .failure(let error):
-                    lastFailure = error
-                    shopifyCLILogger.error("store list failed: \(String(describing: error), privacy: .public)")
-                }
+        // Authenticated CLI commands already share a serial session queue. Submit
+        // one at a time so sync cannot flood that queue ahead of a user refresh.
+        for arguments in requests {
+            do {
+                let envelope = try await runJSON(environment, arguments, as: StoresEnvelope.self)
+                succeeded += 1
+                collected.append(contentsOf: envelope.stores)
+            } catch {
+                lastFailure = error
+                shopifyCLILogger.error("store list failed: \(String(describing: error), privacy: .public)")
             }
         }
 
@@ -106,16 +115,52 @@ enum ShopifyCLI {
         export PATH=\(shellQuoted(environment.path))
         clear
         echo "Signing in to Shopify for Storefront."
+        echo "If your session expired, choose 'Log in with a different account'."
+        echo "You can sign in again with the same Shopify account."
         echo
-        \(shellQuoted(environment.executable.path)) auth login
-        echo
-        echo "All set. Close this window and go back to Storefront."
+        if \(shellQuoted(environment.executable.path)) auth login; then
+            echo
+            echo "All set. Close this window and go back to Storefront."
+        else
+            echo
+            echo "Sign-in didn't finish. Try Sign In again from Storefront."
+        fi
         """
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("Storefront Shopify Sign In.command")
         try script.write(to: url, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
         _ = await MainActor.run { NSWorkspace.shared.open(url) }
+    }
+
+    /// A general account login doesn't authorize theme access for every store. Running
+    /// this read-only command interactively lets the CLI request the store's session.
+    static func openThemeSignInInTerminal(for domain: String) async throws {
+        let environment = try await resolveEnvironment()
+        let script = """
+        #!/bin/sh
+        export PATH=\(shellQuoted(environment.path))
+        unset SHOPIFY_FLAG_NO_INPUT CI
+        clear
+        echo \(shellQuoted("Authorizing live theme access for \(domain)"))
+        echo "Complete the Shopify sign-in if prompted, then return to Storefront."
+        echo
+        if \(shellQuoted(environment.executable.path)) theme list --store \(shellQuoted(domain)) --role live; then
+            echo
+            echo "All set. Return to Storefront to reload the live theme."
+        else
+            echo
+            echo "Theme access wasn't authorized. Check the message above and try again."
+        fi
+        """
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Storefront Theme Sign In \(UUID().uuidString).command")
+        try script.write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+        let opened = await MainActor.run { NSWorkspace.shared.open(url) }
+        guard opened else {
+            throw Failure.failed("Couldn't open Terminal for theme sign-in")
+        }
     }
 
     // MARK: - Environment
@@ -209,6 +254,10 @@ enum ShopifyCLI {
         let stores: [RemoteStore]
     }
 
+    private struct ThemesEnvelope: Decodable {
+        let themes: [RemoteTheme]
+    }
+
     private struct ErrorEnvelope: Decodable {
         struct Body: Decodable {
             let message: String
@@ -218,14 +267,18 @@ enum ShopifyCLI {
     }
 
     private static func runJSON<T: Decodable>(_ environment: Environment, _ arguments: [String], as type: T.Type) async throws -> T {
-        let output = try await run(environment.executable, arguments, environment: environment.variables, timeout: 60)
+        let output = try await sessionCommands.run(environment, arguments)
         let data = jsonPayload(output.data)
         let decoder = JSONDecoder()
         if let value = try? decoder.decode(T.self, from: data) {
             return value
         }
         if let envelope = try? decoder.decode(ErrorEnvelope.self, from: data) {
-            throw classify(envelope.error.message)
+            let message = [envelope.error.message, envelope.error.tryMessage]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n\n")
+            throw classify(message)
         }
         if output.timedOut {
             throw Failure.failed("The Shopify CLI didn't answer within a minute.")
@@ -242,8 +295,14 @@ enum ShopifyCLI {
 
     private static func classify(_ message: String) -> Failure {
         let lowered = message.lowercased()
+        // BusinessPlatform's expired-session error only names the HTTP status, with
+        // none of the sign-in words below. Match a status, not digits in a request ID.
+        let isUnauthorized = lowered.range(
+            of: #"\b(?:http(?:\s+status)?|status(?:\s+code)?)\s*:?\s*401\b"#,
+            options: .regularExpression
+        ) != nil
         let signInHints = ["log in", "logged in", "login", "auth", "alias", "session"]
-        if signInHints.contains(where: lowered.contains) {
+        if isUnauthorized || signInHints.contains(where: lowered.contains) {
             return .notSignedIn(message)
         }
         return .failed(message)
@@ -253,6 +312,34 @@ enum ShopifyCLI {
         let status: Int32
         let data: Data
         let timedOut: Bool
+    }
+
+    private static let sessionCommands = SessionCommandQueue()
+
+    /// CLI processes share the same session file. Serialize authenticated commands so
+    /// switching stores or syncing cannot overlap token refreshes in this app.
+    private actor SessionCommandQueue {
+        private var isRunning = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        func run(_ environment: Environment, _ arguments: [String]) async throws -> ProcessOutput {
+            if isRunning {
+                await withCheckedContinuation { waiters.append($0) }
+            } else {
+                isRunning = true
+            }
+            defer {
+                if waiters.isEmpty {
+                    isRunning = false
+                } else {
+                    waiters.removeFirst().resume()
+                }
+            }
+            return try await ShopifyCLI.run(
+                environment.executable, arguments,
+                environment: environment.variables, timeout: 60
+            )
+        }
     }
 
     /// Output goes to a temp file rather than a pipe: a pipe can deadlock once its buffer
